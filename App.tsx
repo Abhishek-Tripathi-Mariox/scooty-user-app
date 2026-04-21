@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, NativeModules, Platform, StyleSheet, Text, View } from 'react-native';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { OtpScreen } from './src/screens/OtpScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
@@ -77,6 +77,15 @@ const mapRidePlanIdToPlanCode = (id?: RidePlanId | null) => {
   if (id === 'monthly') return 'MONTHLY';
   return 'HOURLY';
 };
+
+const AUTH_TOKEN_KEY = 'scooty_rental_user_auth_token';
+const UserAuthStorage = NativeModules.UserAuthStorage as
+  | {
+      setItem?: (key: string, value: string) => Promise<void>;
+      getItem?: (key: string) => Promise<string | null>;
+      removeItem?: (key: string) => Promise<void>;
+    }
+  | undefined;
 
 const mapBackendPlanToRidePlan = (plan: PlanItem): RidePlan => {
   const id = mapPlanTypeToRidePlanId(plan.type);
@@ -175,6 +184,7 @@ export default function App() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [token, setToken] = useState<string | null>(null);
+  const [isBootstrapping, setIsBootstrapping] = useState(true);
 
   // User data state
   const [user, setUser] = useState<User | null>(null);
@@ -203,6 +213,26 @@ export default function App() {
     () => stations?.map((station, index) => mapStationToPickupStation(station, String(index + 1))) ?? null,
     [stations],
   );
+
+  const persistAuthToken = async (value: string) => {
+    if (Platform.OS !== 'android' || !UserAuthStorage?.setItem) return;
+    await UserAuthStorage.setItem(AUTH_TOKEN_KEY, value);
+  };
+
+  const clearAuthToken = async () => {
+    if (Platform.OS !== 'android' || !UserAuthStorage?.removeItem) return;
+    await UserAuthStorage.removeItem(AUTH_TOKEN_KEY);
+  };
+
+  const hasCompletedPermissions = (settings?: User['settings'] | null) => {
+    const permissions = settings?.permissions;
+    return Boolean(
+      permissions &&
+        (permissions.location !== undefined ||
+          permissions.camera !== undefined ||
+          permissions.notifications !== undefined),
+    );
+  };
 
   const loadRidePlans = async (stationId?: string | null) => {
     if (!token) return [];
@@ -240,14 +270,59 @@ export default function App() {
 
   // Effects
   useEffect(() => {
-    if (step !== 'splash') return;
+    if (step !== 'splash' || isBootstrapping) return;
 
     const timer = setTimeout(() => {
       setStep('login');
     }, 1200);
 
     return () => clearTimeout(timer);
-  }, [step]);
+  }, [isBootstrapping, step]);
+
+  useEffect(() => {
+    let active = true;
+
+    const bootstrapAuth = async () => {
+      try {
+        const storedToken =
+          Platform.OS === 'android' && UserAuthStorage?.getItem
+            ? await UserAuthStorage.getItem(AUTH_TOKEN_KEY)
+            : null;
+
+        if (!storedToken) {
+          return;
+        }
+
+        const result = await userApi.profile(storedToken);
+        if (!active) return;
+
+        setToken(storedToken);
+        setUser(result.user);
+        setDashboard(result.dashboard);
+
+        if (hasCompletedPermissions(result.user?.settings)) {
+          setActiveTab('home');
+          setStep('dashboard');
+          return;
+        }
+
+        setStep('permissions');
+      } catch (error) {
+        await clearAuthToken();
+        console.warn('Failed to restore user session:', error);
+      } finally {
+        if (active) {
+          setIsBootstrapping(false);
+        }
+      }
+    };
+
+    void bootstrapAuth();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (token) {
@@ -343,6 +418,7 @@ export default function App() {
         otp,
       });
       setToken(result.token);
+      void persistAuthToken(result.token);
       setUser(result.user);
       setActiveTab('home');
       setStep('permissions');
@@ -503,6 +579,7 @@ export default function App() {
       {
         text: 'Logout',
         onPress: () => {
+          void clearAuthToken();
           setToken(null);
           setUser(null);
           setDashboard(null);

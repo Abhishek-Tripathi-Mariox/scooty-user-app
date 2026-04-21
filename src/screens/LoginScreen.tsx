@@ -46,25 +46,40 @@ export function LoginScreen({
           styles.screen,
           {
             paddingHorizontal: layout.screenX,
-            paddingTop: Math.max(14, Math.round(layout.screenHeight * 0.024)),
-            paddingBottom: 0,
+            paddingTop: Math.max(16, Math.round(layout.screenHeight * 0.028)),
+            paddingBottom: Math.max(16, Math.round(layout.screenHeight * 0.02)),
           },
         ]}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
           <BrandHeader compact />
+          <Text style={styles.headerCopy}>Secure access for riders</Text>
         </View>
 
         <View style={[styles.card, { width: '100%', maxWidth: layout.authCardWidth }]}>
-          <Text style={styles.cardLabel}>Mobile Number</Text>
+          <View style={styles.cardTopRow}>
+            <Text style={styles.cardLabel}>Mobile Number</Text>
+            <View style={styles.secureChip}>
+              <Text style={styles.secureChipText}>OTP login</Text>
+            </View>
+          </View>
+
           <View style={styles.inputRow}>
             <View style={styles.inputIconWrap}>
               <PhoneIcon width={18} height={18} />
             </View>
-            <Text style={styles.mobileValue}>
-              {mobileNumber.length > 0 ? mobileNumber : 'Enter 10 digit mobile number'}
-            </Text>
+            <View style={styles.countryCode}>
+              <Text style={styles.countryCodeText}>+91</Text>
+            </View>
+            <View style={styles.inputValueWrap}>
+              <Text
+                style={[styles.mobileValue, mobileNumber.length === 0 && styles.mobilePlaceholder]}
+                numberOfLines={1}
+              >
+                {mobileNumber.length > 0 ? mobileNumber : 'Enter your mobile number'}
+              </Text>
+            </View>
           </View>
 
           <Pressable style={styles.termsRow} onPress={onToggleTerms}>
@@ -78,19 +93,15 @@ export function LoginScreen({
           </Pressable>
 
           <PrimaryButton
-            label={loading ? 'Sending OTP...' : 'Send OTP'}
+            label={loading ? 'Sending OTP...' : 'Send OTP  →'}
             onPress={onContinue}
             style={styles.button}
             disabled={loading || !acceptedTerms || mobileNumber.length !== 10}
           />
-
-          <Text style={styles.helperText}>
-            By continuing, you agree to our{' '}
-            <Text style={styles.helperLink}>Terms & Conditions</Text>
-          </Text>
         </View>
 
-        <View style={styles.keypadTray}>
+        <View style={styles.keypadShell}>
+          <Text style={styles.keypadTitle}>Quick number pad</Text>
           <OtpKeypad onKeyPress={handleKeyPress} onBackspace={handleBackspace} />
         </View>
       </ScrollView>
@@ -106,37 +117,66 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   header: {
-    marginTop: 6,
+    marginTop: 12,
     marginBottom: 14,
+    alignItems: 'center',
+  },
+  headerCopy: {
+    marginTop: 10,
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.2,
+    textAlign: 'center',
   },
   card: {
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 14,
-    backgroundColor: 'rgba(255,245,236,0.76)',
+    borderRadius: 26,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 18,
+    backgroundColor: 'rgba(255, 247, 241, 0.66)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.78)',
-    shadowColor: '#e6b9aa',
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
+    borderColor: 'rgba(255,255,255,0.72)',
+    shadowColor: '#c79e92',
+    shadowOpacity: 0.2,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+  },
+  cardTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
   cardLabel: {
     color: '#2a3342',
     fontSize: 13,
     fontWeight: '700',
-    marginBottom: 10,
+  },
+  secureChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.66)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.75)',
+  },
+  secureChipText: {
+    color: COLORS.textSecondary,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
   inputRow: {
-    minHeight: 44,
-    borderRadius: 14,
+    minHeight: 54,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(225, 229, 236, 0.96)',
-    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderColor: 'rgba(223, 216, 213, 0.95)',
+    backgroundColor: 'rgba(255,255,255,0.88)',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
   inputIconWrap: {
     width: 18,
@@ -145,28 +185,46 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 10,
   },
-  mobileValue: {
-    flex: 1,
-    color: '#7b8191',
+  countryCode: {
+    paddingRight: 10,
+    marginRight: 10,
+    borderRightWidth: 1,
+    borderRightColor: '#e5ddd9',
+  },
+  countryCodeText: {
+    color: COLORS.textPrimary,
     fontSize: 14,
+    fontWeight: '800',
+  },
+  inputValueWrap: {
+    flex: 1,
+    minWidth: 0,
+  },
+  mobileValue: {
+    color: COLORS.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  mobilePlaceholder: {
+    color: '#8d8990',
     fontWeight: '500',
-    paddingLeft: 8,
   },
   termsRow: {
-    marginTop: 12,
+    marginTop: 14,
     flexDirection: 'row',
     alignItems: 'flex-start',
   },
   checkbox: {
-    width: 14,
-    height: 14,
-    borderRadius: 3,
+    width: 15,
+    height: 15,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: '#9b8a90',
-    marginTop: 3,
+    marginTop: 1,
     marginRight: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.72)',
   },
   checkboxChecked: {
     backgroundColor: COLORS.button,
@@ -175,42 +233,41 @@ const styles = StyleSheet.create({
   checkboxMark: {
     color: '#fff',
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '900',
+    lineHeight: 10,
   },
   termsText: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
     flex: 1,
-    lineHeight: 14,
+    color: COLORS.textSecondary,
+    fontSize: 11.5,
+    lineHeight: 17,
   },
   termsLink: {
-    fontWeight: '700',
     color: COLORS.button,
+    textDecorationLine: 'underline',
+    fontWeight: '800',
   },
   button: {
-    marginTop: 14,
-    height: 46,
+    marginTop: 18,
+    height: 48,
     borderRadius: 14,
   },
-  helperText: {
-    marginTop: 10,
-    textAlign: 'center',
-    color: '#9da3b5',
-    fontSize: 11,
-    lineHeight: 15,
-  },
-  helperLink: {
-    color: '#9da3b5',
-    textDecorationLine: 'underline',
-  },
-  keypadTray: {
+  keypadShell: {
     width: '100%',
-    marginTop: 18,
-    paddingHorizontal: 0,
-    paddingTop: 12,
-    paddingBottom: 8,
+    marginTop: 16,
+    paddingTop: 14,
+    paddingHorizontal: 14,
+    paddingBottom: 2,
     backgroundColor: 'rgba(217, 221, 230, 0.96)',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+  },
+  keypadTitle: {
+    marginBottom: 8,
+    color: COLORS.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
   },
 });
