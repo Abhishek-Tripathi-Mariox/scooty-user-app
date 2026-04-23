@@ -1,30 +1,32 @@
-import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { PageFrame } from '../components/PageFrame';
+import { useState } from 'react';
+import {
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import Svg, { Path, Rect } from 'react-native-svg';
+import { AppBackground } from '../components/AppBackground';
 import { BottomTabs, type TabKey } from '../components/BottomTabs';
-import { COLORS } from '../constants/theme';
+import { ArrowLeftIcon } from '../components/RideIcons';
 
-type OfferTab = 'offers' | 'referrals';
+type Tab = 'offers' | 'referrals';
 
-const offerCards = [
-  {
-    title: 'First Ride Offer',
-    subtitle: '50% off up to ₹100',
-    code: 'FIRST50',
-    validity: 'Valid till 31 Jan 2026',
-  },
-  {
-    title: 'Go Green',
-    subtitle: '20% off on all rides',
-    code: 'GREEN20',
-    validity: 'Valid till 15 Feb 2026',
-  },
-  {
-    title: 'Weekend Special',
-    subtitle: '₹15 off on weekends',
-    code: 'WEEKEND15',
-    validity: 'Valid till 28 Feb 2026',
-  },
+type Offer = {
+  id: string;
+  title: string;
+  desc: string;
+  code: string;
+  valid: string;
+};
+
+const OFFERS: Offer[] = [
+  { id: 'o1', title: 'First Ride Offer', desc: '50% off up to ₹100', code: 'FIRST50', valid: 'Valid till 31 Jan 2026' },
+  { id: 'o2', title: 'Go Green', desc: '20% off on all rides', code: 'GREEN20', valid: 'Valid till 15 Feb 2026' },
+  { id: 'o3', title: 'Weekend Special', desc: '₹15 off on weekends', code: 'WEEKEND15', valid: 'Valid till 28 Feb 2026' },
 ];
 
 export function OffersRewardsScreen({
@@ -36,285 +38,345 @@ export function OffersRewardsScreen({
   onTabPress: (tab: TabKey) => void;
   activeTab: TabKey;
 }) {
-  const [tab, setTab] = useState<OfferTab>('offers');
+  const [tab, setTab] = useState<Tab>('offers');
 
   return (
-    <View style={styles.root}>
-      <PageFrame title="Offer & Rewards" onBack={onBack} scroll>
-        <View style={styles.content}>
-          <View style={styles.segmentRow}>
-            <Segment
-              label="Offers"
-              active={tab === 'offers'}
-              onPress={() => setTab('offers')}
-            />
-            <Segment
-              label="Referrals"
-              active={tab === 'referrals'}
-              onPress={() => setTab('referrals')}
-            />
-          </View>
+    <SafeAreaView style={styles.safe}>
+      <AppBackground variant="auth" />
 
-          {tab === 'offers' ? (
-            <View style={styles.list}>
-              {offerCards.map((item) => (
-                <View key={item.code} style={styles.offerCard}>
-                  <View style={styles.offerHeader}>
-                    <View style={styles.offerIcon}>
-                      <Text style={styles.offerIconText}>🏷</Text>
-                    </View>
-                    <View style={styles.offerTextWrap}>
-                      <Text style={styles.offerTitle}>{item.title}</Text>
-                      <Text style={styles.offerSubtitle}>{item.subtitle}</Text>
-                    </View>
-                  </View>
+      <View style={styles.header}>
+        <Pressable onPress={onBack} style={styles.backButton}>
+          <ArrowLeftIcon size={24} color="#1c1c1e" />
+        </Pressable>
+        <Text style={styles.headerTitle}>Offer & Rewards</Text>
+      </View>
 
-                  <View style={styles.codeRow}>
-                    <View>
-                      <Text style={styles.codeText}>{item.code}</Text>
-                      <Text style={styles.validityText}>{item.validity}</Text>
-                    </View>
-                    <Pressable onPress={() => Alert.alert('Copied', `${item.code} copied`)}>
-                      <Text style={styles.copyText}>⧉</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.list}>
-              <View style={styles.earningsCard}>
-                <Text style={styles.earningsLabel}>Your Referral Earnings</Text>
-                <Text style={styles.earningsAmount}>₹250</Text>
-                <Text style={styles.earningsMeta}>5 friends invited</Text>
-              </View>
+      <View style={styles.tabBar}>
+        {(['offers', 'referrals'] as const).map((k) => {
+          const active = tab === k;
+          return (
+            <Pressable key={k} style={styles.tabItem} onPress={() => setTab(k)}>
+              <Text style={[styles.tabLabel, active && styles.tabLabelActive]}>
+                {k === 'offers' ? 'Offers' : 'Referrals'}
+              </Text>
+              {active ? <View style={styles.tabIndicator} /> : null}
+            </Pressable>
+          );
+        })}
+      </View>
 
-              <View style={styles.shareCard}>
-                <Text style={styles.sectionTitle}>Share Your Code</Text>
-                <Text style={styles.sectionSubtitle}>Invite friends and earn ₹50 per successful referral</Text>
-                <View style={styles.codeInputRow}>
-                  <Text style={styles.shareCode}>JOHN2026</Text>
-                  <Text style={styles.copyText}>⧉</Text>
-                </View>
-                <Pressable
-                  onPress={() => Alert.alert('Shared', 'Share via WhatsApp coming soon')}
-                  style={styles.shareButton}
-                >
-                  <Text style={styles.shareButtonText}>Share via WhatsApp</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.howCard}>
-                <Text style={styles.sectionTitle}>How it Works?</Text>
-                <Text style={styles.howText}>Share your referral code with friends</Text>
-                <Text style={styles.howText}>They sign up and complete their first ride</Text>
-                <Text style={styles.howText}>You both get ₹50 in wallet!</Text>
-              </View>
-            </View>
-          )}
-        </View>
-      </PageFrame>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        {tab === 'offers' ? <OffersTab /> : <ReferralsTab />}
+      </ScrollView>
 
       <BottomTabs active={activeTab} onTabPress={onTabPress} />
+    </SafeAreaView>
+  );
+}
+
+function OffersTab() {
+  return (
+    <View style={{ gap: 12 }}>
+      {OFFERS.map((o) => (
+        <View key={o.id} style={styles.card}>
+          <View style={styles.offerTop}>
+            <View style={styles.tagIconWrap}>
+              <TagIcon color="#16a34a" />
+            </View>
+            <View style={{ flex: 1, gap: 6 }}>
+              <Text style={styles.offerTitle}>{o.title}</Text>
+              <Text style={styles.offerDesc}>{o.desc}</Text>
+              <View style={styles.codeRow}>
+                <View style={styles.codePill}>
+                  <Text style={styles.codeText}>{o.code}</Text>
+                </View>
+                <Pressable style={styles.copyButton}>
+                  <CopyIcon color="#363636" />
+                </Pressable>
+              </View>
+              <Text style={styles.offerValid}>{o.valid}</Text>
+            </View>
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
 
-function Segment({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
+function ReferralsTab() {
+  const [code] = useState('JOHN2026');
   return (
-    <Pressable onPress={onPress} style={styles.segment}>
-      <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
-      <View style={[styles.segmentLine, active && styles.segmentLineActive]} />
-    </Pressable>
+    <View style={{ gap: 16 }}>
+      <View style={styles.earningsCard}>
+        <View style={styles.earningsIconRow}>
+          <GiftIcon color="#101828" />
+          <Text style={styles.earningsLabel}>Your Referral Earnings</Text>
+        </View>
+        <Text style={styles.earningsAmount}>₹250</Text>
+        <Text style={styles.earningsMeta}>5 friends invited</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.shareTitle}>Share Your Code</Text>
+        <Text style={styles.shareSubtitle}>Invite friends and earn ₹50 per successful referral</Text>
+        <View style={styles.codeInputRow}>
+          <TextInput value={code} editable={false} style={styles.codeInput} />
+          <Pressable style={styles.codeCopyButton}>
+            <CopyIcon color="#363636" />
+          </Pressable>
+        </View>
+        <Pressable style={styles.whatsappButton}>
+          <Text style={styles.whatsappText}>Share via WhatsApp</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.howTitle}>How it Works?</Text>
+        <Text style={styles.howItem}>Share your referral code with friends</Text>
+        <Text style={styles.howItem}>They sign up and complete their first ride</Text>
+        <Text style={styles.howItem}>You both get ₹50 in wallet!</Text>
+      </View>
+    </View>
+  );
+}
+
+function TagIcon({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill={color}>
+      <Path d="M20 12 12 20l-8-8V4h8l8 8ZM7 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z" />
+    </Svg>
+  );
+}
+
+function CopyIcon({ color }: { color: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+      <Rect x={7} y={7} width={13} height={13} rx={2} stroke={color} strokeWidth={1.8} />
+      <Path d="M17 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2" stroke={color} strokeWidth={1.8} />
+    </Svg>
+  );
+}
+
+function GiftIcon({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+      <Rect x={3} y={8} width={18} height={4} stroke={color} strokeWidth={1.8} />
+      <Path d="M12 8v13M3 12v9h18v-9M8.5 8a2.5 2.5 0 1 1 3.5-3.5A2.5 2.5 0 1 1 15.5 8" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  safe: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#ffd1b0',
   },
-  content: {
-    paddingBottom: 18,
-  },
-  segmentRow: {
+  header: {
+    height: 56,
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 10,
-  },
-  segment: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  segmentText: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  segmentTextActive: {
-    color: COLORS.button,
-  },
-  segmentLine: {
-    marginTop: 10,
-    width: '100%',
-    height: 2,
-    borderRadius: 999,
-    backgroundColor: 'transparent',
-  },
-  segmentLineActive: {
-    backgroundColor: COLORS.button,
-  },
-  list: {
-    gap: 10,
-  },
-  offerCard: {
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.82)',
-    padding: 14,
-  },
-  offerHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  offerIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.10)',
-    marginRight: 12,
-  },
-  offerIconText: {
-    fontSize: 16,
-  },
-  offerTextWrap: {
-    flex: 1,
-  },
-  offerTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  offerSubtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  codeRow: {
-    marginTop: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(33, 48, 74, 0.08)',
-    paddingTop: 10,
-  },
-  codeText: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  validityText: {
-    color: COLORS.textMuted,
-    fontSize: 10,
-    marginTop: 4,
-  },
-  copyText: {
-    color: COLORS.textSecondary,
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  earningsCard: {
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.82)',
-    padding: 14,
-  },
-  earningsLabel: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  earningsAmount: {
-    color: COLORS.textPrimary,
-    fontSize: 28,
-    fontWeight: '900',
-    marginTop: 6,
-  },
-  earningsMeta: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    marginTop: 8,
-  },
-  shareCard: {
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.82)',
-    padding: 14,
-  },
-  sectionTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  sectionSubtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  codeInputRow: {
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(33, 48, 74, 0.16)',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.26)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.6)',
   },
-  shareCode: {
-    color: COLORS.textPrimary,
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+  },
+  headerTitle: {
+    marginLeft: 8,
+    color: '#1c1c1e',
+    fontSize: 20,
+    fontWeight: '600',
+    lineHeight: 28,
+  },
+  tabBar: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.26)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.6)',
+  },
+  tabItem: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabLabel: {
+    color: 'rgba(0, 0, 0, 0.6)',
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '500',
+    lineHeight: 18,
   },
-  shareButton: {
-    marginTop: 12,
-    borderRadius: 10,
-    backgroundColor: '#16a34a',
-    paddingVertical: 10,
+  tabLabelActive: {
+    color: '#fc4c02',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#fc4c02',
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  card: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderRadius: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  offerTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  tagIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offerTitle: {
+    color: '#101828',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 26,
+  },
+  offerDesc: {
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  codeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  codePill: {
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  codeText: {
+    color: '#101828',
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: 'Courier',
+  },
+  copyButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offerValid: {
+    color: '#6a7282',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  earningsCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderRadius: 24,
+    paddingVertical: 24,
+    paddingHorizontal: 24,
+    gap: 8,
+  },
+  earningsIconRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  earningsLabel: {
+    color: '#101828',
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  earningsAmount: {
+    color: '#101828',
+    fontSize: 36,
+    fontWeight: '700',
+    lineHeight: 40,
+  },
+  earningsMeta: {
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  shareTitle: {
+    color: '#101828',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 26,
+  },
+  shareSubtitle: {
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  codeInputRow: {
+    flexDirection: 'row',
+    gap: 8,
     alignItems: 'center',
   },
-  shareButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  howCard: {
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.72)',
+  codeInput: {
+    flex: 1,
+    height: 56,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.82)',
-    padding: 14,
+    borderColor: 'rgba(0, 0, 0, 0.23)',
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    color: '#101828',
+    fontSize: 16,
   },
-  howText: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    lineHeight: 17,
-    marginTop: 4,
+  codeCopyButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  whatsappButton: {
+    backgroundColor: '#00a63e',
+    borderRadius: 12,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  whatsappText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 24,
+  },
+  howTitle: {
+    color: '#1c1c1e',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 24,
+  },
+  howItem: {
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
   },
 });

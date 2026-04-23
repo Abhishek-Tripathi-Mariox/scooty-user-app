@@ -1,242 +1,283 @@
-import React from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { PageFrame } from '../components/PageFrame';
+import {
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import Svg, { Path, Rect } from 'react-native-svg';
+import { AppBackground } from '../components/AppBackground';
 import { BottomTabs, type TabKey } from '../components/BottomTabs';
-import { COLORS } from '../constants/theme';
+import {
+  ArrowLeftIcon,
+  ClockIcon,
+  SmallScooterIcon,
+} from '../components/RideIcons';
 import type { RideItem } from '../services/userApi';
-import { formatCurrency } from '../utils/format';
 
-type RideHistoryItem = RideItem & {
+type HistoryRow = {
+  id: string;
   label: string;
-  statusTone?: 'green' | 'orange';
+  dateTime: string;
+  duration: string;
+  distance: string;
+  amount: number;
+  status: 'Completed' | 'Penalty';
 };
 
 export function RideHistoryScreen({
   onBack,
   onTabPress,
   rides,
+  loading = false,
   activeTab,
   onOpenRide,
 }: {
   onBack: () => void;
   onTabPress: (tab: TabKey) => void;
   rides?: RideItem[] | null;
+  loading?: boolean;
   activeTab: TabKey;
   onOpenRide: (ride: RideItem) => void;
 }) {
-  const items: RideHistoryItem[] = (rides || []).map((ride, index) => ({
-    ...ride,
-    label: ride._id?.toUpperCase().slice(0, 7) || `RIDE00${index + 1}`,
-    statusTone: ride.status?.toLowerCase() === 'completed' ? 'green' : 'orange',
-  }));
+  const items: HistoryRow[] =
+    rides && rides.length > 0
+      ? rides.map((r, i) => ({
+          id: r._id || `r${i}`,
+          label: r._id?.toUpperCase().slice(0, 7) || `RIDE00${i + 1}`,
+          dateTime: r.schedule?.startLabel || '—',
+          duration: r.durationHours ? `${r.durationHours}h` : '—',
+          distance: r.distance != null ? `${r.distance.toFixed(1)} km` : '—',
+          amount: r.pricing?.totalPayable ?? r.fare ?? 0,
+          status: r.status?.toLowerCase() === 'cancelled' ? 'Penalty' : 'Completed',
+        }))
+      : [];
 
   return (
-    <View style={styles.root}>
-      <PageFrame title="Ride History" onBack={onBack} scroll>
-        <View style={styles.content}>
-          <FlatList
-            data={items}
-            keyExtractor={(item) => item._id}
-            scrollEnabled={false}
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
-            renderItem={({ item }) => (
-              <Pressable
-                onPress={() => onOpenRide(item)}
-                style={({ pressed }) => [styles.card, pressed && styles.pressed]}
-              >
-                <View style={styles.cardTopRow}>
-                  <View style={styles.titleWrap}>
-                    <View style={styles.iconBubble}>
-                      <Text style={styles.scootyIcon}>🛴</Text>
-                    </View>
-                    <View style={styles.titleTextWrap}>
-                      <Text style={styles.rideId}>{item.planName || item.planCode || item.label}</Text>
-                      <Text style={styles.rideDate}>{formatRideDate(item.startAt || item.schedule?.startAt || item.startTime)}</Text>
-                    </View>
-                  </View>
+    <SafeAreaView style={styles.safe}>
+      <AppBackground variant="auth" />
 
-                  <View style={[styles.statusBadge, item.statusTone === 'orange' ? styles.penaltyBadge : styles.completedBadge]}>
-                    <Text style={[styles.statusText, item.statusTone === 'orange' ? styles.penaltyText : styles.completedText]}>
-                      {item.status || 'Completed'}
-                    </Text>
-                  </View>
+      <View style={styles.header}>
+        <Pressable onPress={onBack} style={styles.backButton}>
+          <ArrowLeftIcon size={24} color="#1c1c1e" />
+        </Pressable>
+        <Text style={styles.headerTitle}>Ride History</Text>
+      </View>
+
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        {loading ? (
+          <Text style={styles.emptyText}>Loading ride history...</Text>
+        ) : items.length === 0 ? (
+          <Text style={styles.emptyText}>No live ride history yet.</Text>
+        ) : (
+          items.map((item, idx) => (
+            <Pressable
+              key={item.id}
+              onPress={() => rides?.[idx] && onOpenRide(rides[idx])}
+              style={styles.card}
+            >
+              <View style={styles.topRow}>
+                <View style={styles.iconTile}>
+                  <SmallScooterIcon size={22} color="#fc4c02" />
                 </View>
-
-                <View style={styles.metaRow}>
-                  <View style={styles.metaItem}>
-                    <Text style={styles.metaIcon}>⏱</Text>
-                    <Text style={styles.metaText}>{formatRideDuration(item.startAt || item.schedule?.startAt || item.startTime)}</Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <Text style={styles.metaIcon}>◈</Text>
-                    <Text style={styles.metaText}>{item.distance ? `${item.distance} km` : '0 km'}</Text>
-                  </View>
-
-                  <Text style={styles.fareText}>{formatCurrency(item.pricing?.totalPayable ?? item.fare ?? 0)}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rideLabel}>{item.label}</Text>
+                  <Text style={styles.rideDate}>{item.dateTime}</Text>
                 </View>
-
-                <View style={styles.receiptRow}>
-                  <Text style={styles.receiptIcon}>▤</Text>
+                <View style={[styles.statusChip, item.status === 'Penalty' && styles.statusChipPenalty]}>
+                  <Text
+                    style={[
+                      styles.statusText,
+                      item.status === 'Penalty' && styles.statusTextPenalty,
+                    ]}
+                  >
+                    {item.status}
+                  </Text>
                 </View>
-              </Pressable>
-            )}
-          />
+              </View>
 
-          {!rides || rides.length === 0 ? (
-            <Text style={styles.emptyText}>No ride history yet</Text>
-          ) : null}
-        </View>
-      </PageFrame>
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <ClockIcon size={18} color="#4a5565" />
+                  <Text style={styles.statText}>{item.duration}</Text>
+                </View>
+                <View style={styles.statItem}>
+                  <DiamondIcon color="#4a5565" />
+                  <Text style={styles.statText}>{item.distance}</Text>
+                </View>
+                <View style={styles.amountWrap}>
+                  <Text style={styles.amountText}>₹{item.amount}</Text>
+                </View>
+              </View>
+
+              <View style={styles.cardDivider} />
+              <View style={styles.receiptRow}>
+                <View style={{ flex: 1 }} />
+                <View style={styles.receiptIconWrap}>
+                  <ReceiptIcon color="#363636" />
+                </View>
+              </View>
+            </Pressable>
+          ))
+        )}
+      </ScrollView>
 
       <BottomTabs active={activeTab} onTabPress={onTabPress} />
-    </View>
+    </SafeAreaView>
   );
 }
 
-function formatRideDate(value?: string) {
-  if (!value) return '28 Jan, 2026 • 10:30 AM';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '28 Jan, 2026 • 10:30 AM';
-  return date.toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: 'Asia/Kolkata',
-  });
+function DiamondIcon({ color }: { color: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 20 20" fill="none">
+      <Path d="M10 2 2 10l8 8 8-8-8-8Z" stroke={color} strokeWidth={1.6} strokeLinejoin="round" />
+      <Path d="m7 8 3-3 3 3-3 3-3-3Z" stroke={color} strokeWidth={1.6} strokeLinejoin="round" />
+    </Svg>
+  );
 }
 
-function formatRideDuration(value?: string) {
-  if (!value) return '18:45';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '18:45';
-  const hh = String(date.getHours() % 12 || 12).padStart(2, '0');
-  const mm = String(date.getMinutes()).padStart(2, '0');
-  return `${hh}:${mm}`;
+function ReceiptIcon({ color }: { color: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 20 20" fill={color}>
+      <Rect x={3} y={2} width={14} height={16} rx={1} />
+      <Path d="M6 6h8M6 9h8M6 12h5" stroke="#ffffff" strokeWidth={1.2} />
+    </Svg>
+  );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  safe: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#ffd1b0',
   },
-  content: {
-    paddingBottom: 18,
-  },
-  card: {
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.70)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.84)',
-    padding: 14,
-  },
-  separator: {
-    height: 10,
-  },
-  pressed: {
-    opacity: 0.84,
-  },
-  cardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  titleWrap: {
+  header: {
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-    paddingRight: 10,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.26)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.6)',
   },
-  iconBubble: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 100, 28, 0.08)',
+  backButton: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    borderRadius: 20,
   },
-  scootyIcon: {
-    fontSize: 18,
+  headerTitle: {
+    marginLeft: 8,
+    color: '#1c1c1e',
+    fontSize: 20,
+    fontWeight: '600',
+    lineHeight: 28,
   },
-  titleTextWrap: {
+  scroll: {
     flex: 1,
   },
-  rideId: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  rideDate: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-  },
-  completedBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-  },
-  penaltyBadge: {
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  completedText: {
-    color: '#0ea35d',
-  },
-  penaltyText: {
-    color: '#f59e0b',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(33, 48, 74, 0.08)',
-    paddingTop: 10,
-  },
-  metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  metaIcon: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  metaText: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-  },
-  fareText: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  receiptRow: {
-    alignItems: 'flex-end',
-    marginTop: 14,
-  },
-  receiptIcon: {
-    color: COLORS.textPrimary,
-    fontSize: 16,
-    fontWeight: '900',
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
+    gap: 12,
   },
   emptyText: {
-    color: COLORS.textMuted,
-    fontSize: 12,
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
     textAlign: 'center',
+    paddingVertical: 20,
+  },
+  card: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderRadius: 24,
     paddingVertical: 16,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconTile: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rideLabel: {
+    color: '#101828',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  rideDate: {
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  statusChip: {
+    backgroundColor: 'rgba(255, 255, 255, 0.49)',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  statusChipPenalty: {
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+  },
+  statusText: {
+    color: '#16a34a',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  statusTextPenalty: {
+    color: '#f59e0b',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  statItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  statText: {
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  amountWrap: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  amountText: {
+    color: '#101828',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 26,
+  },
+  cardDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+  },
+  receiptRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  receiptIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

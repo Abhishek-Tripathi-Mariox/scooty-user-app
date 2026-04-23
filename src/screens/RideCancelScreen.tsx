@@ -1,257 +1,314 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, View, Pressable, ScrollView } from 'react-native';
-import { PageFrame } from '../components/PageFrame';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { COLORS } from '../constants/theme';
+import { useState } from 'react';
+import {
+  Modal,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
+import { AppBackground } from '../components/AppBackground';
+import { BottomTabs, type TabKey } from '../components/BottomTabs';
+import { GradientButton } from '../components/GradientButton';
+import { ArrowLeftIcon } from '../components/RideIcons';
 
-export type CancellationReason = 
-  | 'change-plan'
-  | 'no-scooter'
-  | 'low-battery'
-  | 'station-far'
-  | 'wrong-book'
-  | 'emergency'
-  | 'price-issue'
-  | 'weather'
-  | 'other';
+const REASONS = [
+  'Change in plan / timing',
+  'Scooty not available at station',
+  'Low battery level',
+  'Station is too far',
+  'Booked by mistake',
+  'Found another scooty nearby',
+  'App / unlock issue',
+  'Price not suitable',
+  'Weather conditions',
+  'Emergency situation',
+  'Other',
+];
 
 export function RideCancelScreen({
   onBack,
   onConfirmCancel,
-  onKeepBooking,
+  activeTab,
+  onTabPress,
 }: {
   onBack: () => void;
-  onConfirmCancel: (reason: CancellationReason) => void;
-  onKeepBooking: () => void;
+  onConfirmCancel: (reason: string) => void;
+  activeTab: TabKey;
+  onTabPress: (tab: TabKey) => void;
 }) {
-  const [selectedReason, setSelectedReason] = useState<CancellationReason | null>(null);
-  const [showConfirm, setShowConfirm] = useState(false);
-
-  const reasons: Array<{ id: CancellationReason; label: string }> = [
-    { id: 'change-plan', label: 'Change in plan / timing' },
-    { id: 'no-scooter', label: 'Scooter not available at station' },
-    { id: 'low-battery', label: 'Low battery level' },
-    { id: 'station-far', label: 'Station is too far' },
-    { id: 'wrong-book', label: 'Booked by mistake' },
-    { id: 'emergency', label: 'Emergency situation' },
-    { id: 'price-issue', label: 'Price not suitable' },
-    { id: 'weather', label: 'Weather conditions' },
-    { id: 'other', label: 'Other' },
-  ];
-
-  if (showConfirm && selectedReason) {
-    return (
-      <View style={styles.root}>
-        <PageFrame title="Cancel booking?" onBack={() => setShowConfirm(false)}>
-          <View style={styles.confirmContainer}>
-            <View style={styles.warningIcon}>
-              <Text style={styles.warningText}>❓</Text>
-            </View>
-
-            <Text style={styles.confirmTitle}>Are you sure you want to cancel?</Text>
-            <Text style={styles.confirmSubtitle}>
-              You're about to cancel your scooty booking
-            </Text>
-
-            <View style={styles.detailsBox}>
-              <Text style={styles.detailsLabel}>Cancellation Reason</Text>
-              <Text style={styles.detailsValue}>
-                {reasons.find((r) => r.id === selectedReason)?.label}
-              </Text>
-            </View>
-
-            <View style={styles.buttonsGroup}>
-              <Pressable
-                style={styles.keepButton}
-                onPress={onKeepBooking}
-              >
-                <Text style={styles.keepText}>Keep Booking</Text>
-              </Pressable>
-
-              <PrimaryButton
-                label="Cancel Booking"
-                onPress={() => onConfirmCancel(selectedReason)}
-                style={{
-                  backgroundColor: '#ef4444',
-                }}
-              />
-            </View>
-          </View>
-        </PageFrame>
-      </View>
-    );
-  }
+  const [selectedReason, setSelectedReason] = useState(REASONS[0]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   return (
-    <View style={styles.root}>
-      <PageFrame title="Ride Cancel" onBack={onBack}>
-        <ScrollView contentContainerStyle={styles.reasonsContainer}>
-          <Text style={styles.reasonsTitle}>Why are you cancelling?</Text>
+    <SafeAreaView style={styles.safe}>
+      <AppBackground variant="auth" />
 
-          {reasons.map((reason) => (
-            <Pressable
-              key={reason.id}
-              style={[
-                styles.reasonItem,
-                selectedReason === reason.id && styles.reasonItemSelected,
-              ]}
-              onPress={() => setSelectedReason(reason.id)}
-            >
-              <View
-                style={[
-                  styles.radioButton,
-                  selectedReason === reason.id && styles.radioButtonSelected,
-                ]}
+      <View style={styles.header}>
+        <Pressable onPress={onBack} style={styles.backButton}>
+          <ArrowLeftIcon size={24} color="#1c1c1e" />
+        </Pressable>
+        <Text style={styles.headerTitle}>Ride Cancel</Text>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.question}>Why are you cancelling?</Text>
+
+        <View style={styles.list}>
+          {REASONS.map((reason) => {
+            const active = reason === selectedReason;
+            return (
+              <Pressable
+                key={reason}
+                style={styles.row}
+                onPress={() => setSelectedReason(reason)}
               >
-                {selectedReason === reason.id && (
-                  <View style={styles.radioButtonInner} />
-                )}
-              </View>
-              <Text style={styles.reasonLabel}>{reason.label}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+                <View style={[styles.radio, active && styles.radioActive]}>
+                  {active ? <View style={styles.radioDot} /> : null}
+                </View>
+                <Text style={styles.reasonText}>{reason}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
 
-        <View style={styles.footer}>
-          <PrimaryButton
-            label="Cancel Ride"
-            onPress={() => setShowConfirm(true)}
-            disabled={!selectedReason}
-            style={{
-              backgroundColor: selectedReason ? '#ef4444' : COLORS.buttonDisabled,
-            }}
+      <View style={styles.footerWrap}>
+        <View style={styles.cancelButton}>
+          <GradientButton
+            label="Cancel ride"
+            onPress={() => setConfirmOpen(true)}
+            height={48}
+            labelStyle={styles.cancelLabel}
           />
         </View>
-      </PageFrame>
-    </View>
+      </View>
+
+      <BottomTabs active={activeTab} onTabPress={onTabPress} />
+
+      <ConfirmCancelDialog
+        visible={confirmOpen}
+        onKeep={() => setConfirmOpen(false)}
+        onCancel={() => {
+          setConfirmOpen(false);
+          onConfirmCancel(selectedReason);
+        }}
+      />
+    </SafeAreaView>
+  );
+}
+
+function ConfirmCancelDialog({
+  visible,
+  onKeep,
+  onCancel,
+}: {
+  visible: boolean;
+  onKeep: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onKeep}>
+      <Pressable style={styles.dialogOverlay} onPress={onKeep} />
+      <View style={styles.dialogWrap} pointerEvents="box-none">
+        <View style={styles.dialog}>
+          <View style={styles.dialogIconCircle}>
+            <XIcon size={42} color="#ee3e35" />
+          </View>
+          <Text style={styles.dialogTitle}>Cancel booking?</Text>
+          <Text style={styles.dialogBody}>You&apos;re about to cancel your scooty booking.</Text>
+
+          <View style={styles.dialogActions}>
+            <Pressable style={[styles.dialogButton, styles.dialogKeep]} onPress={onKeep}>
+              <Text style={styles.dialogKeepText}>Keep Booking</Text>
+            </Pressable>
+            <Pressable style={[styles.dialogButton, styles.dialogCancel]} onPress={onCancel}>
+              <Text style={styles.dialogCancelText}>Cancel Booking</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function XIcon({ size, color }: { size: number; color: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 42 42" fill="none">
+      <Circle cx={21} cy={21} r={20} stroke={color} strokeWidth={2} />
+      <Path d="m14 14 14 14M28 14 14 28" stroke={color} strokeWidth={2} strokeLinecap="round" />
+    </Svg>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  reasonsContainer: {
-    paddingBottom: 100,
+  safe: {
+    flex: 1,
+    backgroundColor: '#ffd1b0',
   },
-  reasonsTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '900',
-    marginBottom: 12,
-  },
-  reasonItem: {
+  header: {
+    height: 61,
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.76)',
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    paddingVertical: 12,
     paddingHorizontal: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.26)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.6)',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+  },
+  headerTitle: {
+    marginLeft: 8,
+    color: '#1c1c1e',
+    fontSize: 20,
+    fontWeight: '600',
+    lineHeight: 32,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 19,
+    paddingTop: 16,
+    paddingBottom: 160,
+  },
+  question: {
+    color: '#121212',
+    fontSize: 18,
+    fontWeight: '500',
+    lineHeight: 28,
     marginBottom: 10,
   },
-  reasonItemSelected: {
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
-    borderColor: '#ef4444',
+  list: {
+    gap: 0,
   },
-  radioButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: COLORS.textSecondary,
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 16,
+  },
+  radio: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: '#94a3b8',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
-  radioButtonSelected: {
-    borderColor: '#ef4444',
+  radioActive: {
+    borderColor: '#121212',
   },
-  radioButtonInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#ef4444',
+  radioDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#121212',
   },
-  reasonLabel: {
-    flex: 1,
-    color: COLORS.textPrimary,
-    fontWeight: '600',
-    fontSize: 12,
+  reasonText: {
+    color: '#121212',
+    fontSize: 14,
+    lineHeight: 20,
+    opacity: 0.8,
   },
-  footer: {
+  footerWrap: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    bottom: 80,
+    paddingHorizontal: 52,
   },
-  confirmContainer: {
-    alignItems: 'center',
-    paddingVertical: 20,
+  cancelButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
   },
-  warningIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+  cancelLabel: {
+    fontSize: 18,
+    fontWeight: '500',
+  },
+  dialogOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+  },
+  dialogWrap: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    paddingHorizontal: 40,
   },
-  warningText: {
-    fontSize: 40,
-  },
-  confirmTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 16,
-    fontWeight: '900',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  confirmSubtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    marginBottom: 20,
-    textAlign: 'center',
-  },
-  detailsBox: {
+  dialog: {
     width: '100%',
+    backgroundColor: '#ffffff',
     borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.76)',
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    padding: 12,
-    marginBottom: 20,
-  },
-  detailsLabel: {
-    color: COLORS.textSecondary,
-    fontSize: 10,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  detailsValue: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  buttonsGroup: {
-    width: '100%',
-    gap: 10,
-  },
-  keepButton: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.button,
-    paddingVertical: 10,
+    paddingHorizontal: 24,
+    paddingVertical: 28,
     alignItems: 'center',
+    gap: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
   },
-  keepText: {
-    color: COLORS.button,
-    fontSize: 12,
+  dialogIconCircle: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dialogTitle: {
+    color: '#43484b',
+    fontSize: 16,
     fontWeight: '700',
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  dialogBody: {
+    color: '#6e768a',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  dialogActions: {
+    marginTop: 8,
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  dialogButton: {
+    flex: 1,
+    height: 48,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dialogKeep: {
+    borderWidth: 1,
+    borderColor: '#363636',
+  },
+  dialogKeepText: {
+    color: '#363636',
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  dialogCancel: {
+    backgroundColor: '#ee3e35',
+  },
+  dialogCancelText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 20,
   },
 });

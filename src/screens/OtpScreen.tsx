@@ -1,20 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  SafeAreaView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import { AppBackground } from '../components/AppBackground';
 import { BrandHeader } from '../components/BrandHeader';
-import { OtpBoxes } from '../components/OtpBoxes';
-import { OtpKeypad } from '../components/OtpKeypad';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { ScreenSurface } from '../components/ScreenSurface';
+import { GradientButton } from '../components/GradientButton';
+import { LockIcon } from '../components/LockIcon';
+import { PhoneIcon } from '../components/PhoneIcon';
 import { DEFAULT_PHONE_NUMBER, OTP_LENGTH, RESEND_SECONDS } from '../constants/auth';
-import { COLORS } from '../constants/theme';
-import { useResponsiveLayout } from '../utils/responsive';
 
 export function OtpScreen({
   phoneNumber,
@@ -36,7 +36,8 @@ export function OtpScreen({
   loading?: boolean;
 }) {
   const [secondsLeft, setSecondsLeft] = useState(RESEND_SECONDS);
-  const layout = useResponsiveLayout();
+  const otpRef = useRef<TextInput>(null);
+  void onBack;
 
   useEffect(() => {
     setSecondsLeft(RESEND_SECONDS);
@@ -46,171 +47,183 @@ export function OtpScreen({
     return () => clearInterval(timer);
   }, []);
 
-  const handleKeyPress = (value: string) => {
-    if (otp.length >= OTP_LENGTH) {
-      return;
-    }
+  useEffect(() => {
+    const t = setTimeout(() => otpRef.current?.focus(), 200);
+    return () => clearTimeout(t);
+  }, []);
 
-    onOtpChange(`${otp}${value}`);
+  const handleOtpChange = (value: string) => {
+    onOtpChange(value.replace(/\D/g, '').slice(0, OTP_LENGTH));
   };
 
-  const handleBackspace = () => {
-    onOtpChange(otp.slice(0, -1));
-  };
+  const displayNumber = phoneNumber || DEFAULT_PHONE_NUMBER;
+  const canSubmit = !loading && otp.length === OTP_LENGTH;
 
   return (
-    <ScreenSurface variant="otp">
+    <SafeAreaView style={styles.safe}>
+      <AppBackground variant="auth" />
       <KeyboardAvoidingView
-        style={[
-          styles.screen,
-          {
-            paddingHorizontal: layout.screenX,
-            paddingTop: Math.max(18, Math.round(layout.screenHeight * 0.03)),
-            paddingBottom: Math.max(18, Math.round(layout.screenHeight * 0.02)),
-          },
-        ]}
+        style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <Pressable onPress={onBack} style={styles.backButton}>
-          <Text style={styles.backButtonText}>←</Text>
-        </Pressable>
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <BrandHeader />
+          </View>
 
-        <View style={styles.brandRow}>
-          <BrandHeader compact />
-        </View>
+          <View style={styles.card}>
+            <View style={styles.field}>
+              <Text style={styles.label}>Mobile Number</Text>
+              <Pressable style={styles.inputRow} onPress={onChangeNumber}>
+                <View style={styles.inputIcon}>
+                  <PhoneIcon width={20} height={20} />
+                </View>
+                <Text style={styles.valueText}>{displayNumber}</Text>
+              </Pressable>
+            </View>
 
-        <View style={styles.header}>
-          <Text style={styles.title}>Enter OTP</Text>
-          <Text style={styles.subtitle}>
-            We&apos;ve sent a {OTP_LENGTH}-digit code to{'\n'}
-            <Text style={styles.phone}>+91 {phoneNumber || DEFAULT_PHONE_NUMBER}</Text>
-          </Text>
-          <Text style={styles.sentNote}>OTP sent to {phoneNumber || DEFAULT_PHONE_NUMBER}</Text>
-        </View>
-
-        <View style={[styles.card, { width: '100%', maxWidth: layout.authCardWidth }]}>
-          <Text style={styles.cardLabel}>Enter OTP</Text>
-          <OtpBoxes otp={otp} length={OTP_LENGTH} />
-
-          <Text style={styles.resendText}>
-            {secondsLeft > 0 ? (
-              <>
-                Resend OTP in <Text style={styles.resendAccent}>{secondsLeft}s</Text>
-              </>
-            ) : (
-              <Text style={styles.resendAccent} onPress={onResend}>
-                Resend OTP
+            <View style={styles.field}>
+              <Text style={styles.label}>Enter OTP</Text>
+              <Pressable style={styles.inputRow} onPress={() => otpRef.current?.focus()}>
+                <View style={styles.inputIcon}>
+                  <LockIcon width={20} height={20} />
+                </View>
+                <TextInput
+                  ref={otpRef}
+                  style={styles.input}
+                  value={otp}
+                  onChangeText={handleOtpChange}
+                  placeholder={`Enter ${OTP_LENGTH} digit OTP`}
+                  placeholderTextColor="#717182"
+                  keyboardType="number-pad"
+                  maxLength={OTP_LENGTH}
+                  autoFocus
+                />
+              </Pressable>
+              <Text style={styles.helper}>
+                {secondsLeft > 0 ? (
+                  <>OTP sent to {displayNumber}</>
+                ) : (
+                  <Text onPress={onResend} style={styles.resendLink}>
+                    Resend OTP
+                  </Text>
+                )}
               </Text>
-            )}
-          </Text>
+            </View>
 
-          <PrimaryButton
-            label={loading ? 'Verifying...' : 'Login'}
-            onPress={onVerify}
-            style={styles.button}
-            disabled={otp.length < OTP_LENGTH || loading}
-          />
+            <GradientButton
+              label={loading ? 'Verifying...' : 'Login'}
+              onPress={onVerify}
+              disabled={!canSubmit}
+              height={48}
+              radius={12}
+              style={styles.loginButton}
+            />
 
-          <Pressable style={styles.changeRow} onPress={onChangeNumber}>
-            <Text style={styles.changeText}>
-              Changed your number? <Text style={styles.changeLink}>Login again</Text>
+            <Text style={styles.terms}>
+              By continuing, you agree to our{'\n'}
+              <Text style={styles.termsLink}>Terms & Conditions</Text>
             </Text>
-          </Pressable>
+          </View>
         </View>
-
-        <OtpKeypad onKeyPress={handleKeyPress} onBackspace={handleBackspace} />
       </KeyboardAvoidingView>
-    </ScreenSurface>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
+  safe: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: '#ffd1b0',
   },
-  backButton: {
-    marginTop: 20,
-    width: 28,
-    height: 28,
+  flex: {
+    flex: 1,
+  },
+  content: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  backButtonText: {
-    fontSize: 24,
-    color: COLORS.textPrimary,
-    marginTop: -2,
-  },
-  brandRow: {
-    marginTop: 8,
-    alignItems: 'center',
+    paddingTop: 63,
+    paddingHorizontal: 20,
   },
   header: {
-    marginTop: 10,
-    marginBottom: 14,
-  },
-  title: {
-    color: COLORS.textPrimary,
-    fontSize: 21,
-    fontWeight: '900',
-  },
-  subtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    marginTop: 7,
-    lineHeight: 18,
-  },
-  phone: {
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  sentNote: {
-    marginTop: 8,
-    color: COLORS.textMuted,
-    fontSize: 10,
-  },
-  card: {
-    borderRadius: 18,
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 14,
-    backgroundColor: 'rgba(255,255,255,0.28)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.55)',
-    shadowColor: '#d9b7ab',
-    shadowOpacity: 0.14,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 12 },
-  },
-  cardLabel: {
-    color: '#2e3444',
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  resendText: {
-    marginTop: 16,
-    color: COLORS.textSecondary,
-    fontSize: 10,
-    textAlign: 'center',
-  },
-  resendAccent: {
-    fontWeight: '700',
-    color: COLORS.button,
-  },
-  button: {
-    marginTop: 18,
-  },
-  changeRow: {
-    marginTop: 12,
     alignItems: 'center',
   },
-  changeText: {
-    color: COLORS.textSecondary,
-    fontSize: 10,
+  card: {
+    width: '100%',
+    maxWidth: 345,
+    marginTop: 24,
+    paddingVertical: 24,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    backgroundColor: '#f6e3d4',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 6,
   },
-  changeLink: {
-    fontWeight: '700',
-    color: COLORS.button,
+  field: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#1e293b',
+    marginBottom: 8,
+    lineHeight: 18,
+  },
+  inputRow: {
+    height: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    overflow: 'hidden',
+  },
+  inputIcon: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1e293b',
+    padding: 0,
+  },
+  valueText: {
+    flex: 1,
+    fontSize: 16,
+    color: '#717182',
+  },
+  helper: {
+    marginTop: 8,
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#6a7282',
+  },
+  resendLink: {
+    color: '#fc4c02',
+    fontWeight: '600',
+  },
+  loginButton: {
+    marginTop: 4,
+  },
+  terms: {
+    marginTop: 16,
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#99a1af',
+    textAlign: 'center',
+  },
+  termsLink: {
+    color: '#99a1af',
   },
 });

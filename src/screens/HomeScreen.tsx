@@ -1,6 +1,8 @@
 import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { BottomTabs, type TabKey } from '../components/BottomTabs';
+import { GradientButton } from '../components/GradientButton';
+import { MapPinIcon, ScooterIcon, ShareIcon, WalletIcon } from '../components/HomeIcons';
 import { ScreenSurface } from '../components/ScreenSurface';
 import { COLORS } from '../constants/theme';
 import type { Dashboard, User } from '../services/userApi';
@@ -8,12 +10,17 @@ import type { PickupStation } from './PickupStationScreen';
 import { formatCurrency } from '../utils/format';
 import { useResponsiveLayout } from '../utils/responsive';
 
-const ScootyImage = require('../assets/images/scooty.png');
+const ScootyImage = require('../assets/images/scooty-3d.png');
+const MapBackground = require('../assets/images/map-bg.png');
+const ScootyMarker = require('../assets/images/scooty-marker.png');
+const RedPin = require('../assets/images/red-pin.png');
+const ReferPerson = require('../assets/images/refer-person.png');
 
 export function HomeScreen({
   user,
   dashboard,
   stations,
+  loading = false,
   activeTab,
   onTabPress,
   onBookScooty,
@@ -23,6 +30,7 @@ export function HomeScreen({
   user?: User | null;
   dashboard?: Dashboard | null;
   stations?: PickupStation[] | null;
+  loading?: boolean;
   activeTab: TabKey;
   onTabPress: (tab: TabKey) => void;
   onBookScooty: () => void;
@@ -30,8 +38,8 @@ export function HomeScreen({
   onReferPress?: () => void;
 }) {
   const layout = useResponsiveLayout();
-  const city = user?.settings?.location?.city || user?.city || 'Kuala Lumpur, Malaysia';
-  const nearbyStations = (stations && stations.length > 0 ? stations : fallbackStations).slice(0, 5);
+  const city = user?.settings?.location?.city || user?.city || 'Location not set';
+  const nearbyStations = (stations ?? []).slice(0, 5);
   const carouselGap = Math.max(8, Math.round(layout.screenWidth * 0.025));
   const bookButtonHeight = Math.max(50, Math.round(layout.screenHeight * 0.067));
 
@@ -42,7 +50,7 @@ export function HomeScreen({
           <View style={[styles.heroTopRow, { marginBottom: Math.max(10, Math.round(layout.screenHeight * 0.014)) }]}>
             <View style={styles.locationWrap}>
               <View style={styles.locationIcon}>
-                <Text style={styles.locationIconText}>⌖</Text>
+                <MapPinIcon size={18} />
               </View>
               <View>
                 <Text style={styles.smallLabel}>Your location</Text>
@@ -51,37 +59,37 @@ export function HomeScreen({
             </View>
 
             <View style={styles.walletChip}>
-              <Text style={styles.walletIcon}>💳</Text>
-              <Text style={styles.walletText}>{formatCurrency(dashboard?.walletBalance ?? 450)}</Text>
+              <WalletIcon size={20} />
+              <Text style={styles.walletText}>{dashboard ? formatCurrency(dashboard.walletBalance) : '₹0.00'}</Text>
             </View>
           </View>
 
-          <View style={[styles.mapCard, { height: layout.mapCardHeight, borderRadius: Math.max(22, Math.round(layout.screenWidth * 0.06)) }]}>
-            <View style={styles.mapBase} />
-            <View style={styles.mapRoadHorizontal} />
-            <View style={[styles.mapRoadHorizontal, styles.mapRoadHorizontal2]} />
-            <View style={styles.mapRoadVertical} />
-            <View style={[styles.mapRoadVertical, styles.mapRoadVertical2]} />
-            <View style={styles.mapGlowA} />
-            <View style={styles.mapGlowB} />
-
+          <ImageBackground
+            source={MapBackground}
+            style={[styles.mapCard, { height: layout.mapCardHeight, borderRadius: Math.max(22, Math.round(layout.screenWidth * 0.06)) }]}
+            imageStyle={[styles.mapImage, { borderRadius: Math.max(22, Math.round(layout.screenWidth * 0.06)) }]}
+            resizeMode="cover"
+          >
             {mapPins.map((pin) => (
               <View key={pin.id} style={[styles.mapPin, { left: pin.left, top: pin.top }]}>
-                <View style={styles.pinBadge}>
-                  <Text style={styles.pinBadgeText}>🛵</Text>
-                </View>
+                <Image source={ScootyMarker} style={styles.pinBadgeImage} resizeMode="contain" />
               </View>
             ))}
 
             <View style={styles.centerPin}>
-              <Text style={styles.centerPinText}>📍</Text>
+              <Image source={RedPin} style={styles.centerPinImage} resizeMode="contain" />
             </View>
-          </View>
+          </ImageBackground>
 
-          <Pressable style={[styles.bookButton, { height: bookButtonHeight, borderRadius: Math.max(16, Math.round(layout.screenWidth * 0.045)) }]} onPress={onBookScooty}>
-            <Text style={styles.bookButtonIcon}>↻</Text>
-            <Text style={styles.bookButtonText}>Book a Scooty</Text>
-          </Pressable>
+          <GradientButton
+            label="Book a Scooty"
+            onPress={onBookScooty}
+            height={bookButtonHeight}
+            radius={Math.max(12, Math.round(layout.screenWidth * 0.035))}
+            style={styles.bookButton}
+            leftIcon={<ScooterIcon size={22} />}
+            labelStyle={styles.bookButtonText}
+          />
         </View>
 
         <View style={[styles.sectionRow, { paddingHorizontal: layout.screenX, marginBottom: 8 }]}>
@@ -98,59 +106,69 @@ export function HomeScreen({
           snapToInterval={layout.heroCardWidth + carouselGap}
           decelerationRate="fast"
         >
-          {nearbyStations.map((station) => (
-            <Pressable
-              key={station.id}
-              style={[
-                styles.stationCard,
-                {
-                  width: layout.heroCardWidth,
-                  borderRadius: Math.max(18, Math.round(layout.screenWidth * 0.055)),
-                  paddingHorizontal: Math.max(10, Math.round(layout.screenWidth * 0.03)),
-                },
-              ]}
-              onPress={onBookScooty}
-            >
-              <View
+          {loading ? (
+            <View style={[styles.emptyStateCard, { width: layout.heroCardWidth }]}>
+              <Text style={styles.emptyStateTitle}>Loading live stations</Text>
+              <Text style={styles.emptyStateText}>Fetching the latest scooty availability from the backend.</Text>
+            </View>
+          ) : nearbyStations.length > 0 ? (
+            nearbyStations.map((station) => (
+              <Pressable
+                key={station.id}
                 style={[
-                  styles.stationArtworkWrap,
+                  styles.stationCard,
                   {
-                    height: layout.heroArtworkHeight,
-                    borderRadius: Math.max(16, Math.round(layout.screenWidth * 0.045)),
+                    width: layout.heroCardWidth,
+                    borderRadius: Math.max(18, Math.round(layout.screenWidth * 0.055)),
+                    paddingHorizontal: Math.max(10, Math.round(layout.screenWidth * 0.03)),
                   },
                 ]}
+                onPress={onBookScooty}
               >
-                <View style={styles.artBackdrop} />
-                <Image
-                  source={ScootyImage}
-                  style={[styles.scootyImage, { width: layout.heroArtworkHeight + 14, height: layout.heroArtworkHeight + 14 }]}
-                  resizeMode="contain"
-                />
-              </View>
+                <View
+                  style={[
+                    styles.stationArtworkWrap,
+                    {
+                      height: layout.heroArtworkHeight,
+                      borderRadius: Math.max(16, Math.round(layout.screenWidth * 0.045)),
+                    },
+                  ]}
+                >
+                  <View style={styles.artBackdrop} />
+                  <Image
+                    source={ScootyImage}
+                    style={[styles.scootyImage, { width: layout.heroArtworkHeight + 14, height: layout.heroArtworkHeight + 14 }]}
+                    resizeMode="contain"
+                  />
+                </View>
 
-              <Text style={styles.stationName} numberOfLines={1}>
-                {station.name}
-              </Text>
+                <Text style={styles.stationName} numberOfLines={1}>
+                  {station.name}
+                </Text>
 
-              <Text style={styles.stationAddress} numberOfLines={2}>
-                {station.address}
-              </Text>
+                <Text style={styles.stationAddress} numberOfLines={2}>
+                  {station.address}
+                </Text>
 
-              <View style={styles.statsRow}>
-                <Meta label={`${station.available} available`} icon="🔋" />
-                <Meta label={station.distance} icon="📍" />
-              </View>
+                <View style={styles.statsRow}>
+                  <Meta label={`${station.available} available`} icon="🔋" />
+                  <Meta label={station.distance} icon="📍" />
+                </View>
 
-              <View style={styles.cardFooter}>
-                <Text style={styles.parkingText}>{station.parking}</Text>
-                <Text style={styles.batteryText}>{station.battery}</Text>
-              </View>
+                <View style={styles.cardFooter}>
+                  <Text style={styles.parkingText}>{station.parking}</Text>
+                  <Text style={styles.batteryText}>{station.battery}</Text>
+                </View>
 
-              <View style={styles.bookNowPill}>
-                <Text style={styles.bookNowText}>Book Now</Text>
-              </View>
-            </Pressable>
-          ))}
+                <GradientButton label="Book Now" onPress={onBookScooty} height={40} radius={12} />
+              </Pressable>
+            ))
+          ) : (
+            <View style={[styles.emptyStateCard, { width: layout.heroCardWidth }]}>
+              <Text style={styles.emptyStateTitle}>No live stations yet</Text>
+              <Text style={styles.emptyStateText}>The backend returned no nearby stations for this location.</Text>
+            </View>
+          )}
         </ScrollView>
 
         <Pressable style={[styles.referralCard, { marginHorizontal: layout.screenX, borderRadius: Math.max(18, Math.round(layout.screenWidth * 0.055)) }]} onPress={onReferPress}>
@@ -159,52 +177,13 @@ export function HomeScreen({
             <Text style={styles.referralSubtitle}>Invite friends and earn after their first ride</Text>
 
             <View style={styles.shareButton}>
-              <Text style={styles.shareButtonIcon}>↗</Text>
+              <ShareIcon size={14} color="#ff7a45" />
               <Text style={styles.shareButtonText}>Share Code</Text>
             </View>
           </View>
 
-          <View style={[styles.referralVisual, { width: layout.referralVisualSize, height: layout.referralVisualSize }]}>
-            <View
-              style={[
-                styles.referralOrb,
-                {
-                  width: layout.referralVisualSize * 0.86,
-                  height: layout.referralVisualSize * 0.86,
-                  borderRadius: (layout.referralVisualSize * 0.86) / 2,
-                },
-              ]}
-            />
-            <View
-              style={[
-                styles.avatarWrap,
-                {
-                  width: Math.round(layout.referralVisualSize * 0.4),
-                  height: Math.round(layout.referralVisualSize * 0.48),
-                  top: Math.round(layout.referralVisualSize * 0.12),
-                  left: Math.round(layout.referralVisualSize * 0.26),
-                },
-              ]}
-            >
-              <View style={styles.avatarHead} />
-              <View style={styles.avatarBody} />
-            </View>
-            <View
-              style={[
-                styles.phoneMock,
-                {
-                  width: Math.round(layout.referralVisualSize * 0.24),
-                  height: Math.round(layout.referralVisualSize * 0.42),
-                  right: Math.round(layout.referralVisualSize * 0.06),
-                  bottom: Math.round(layout.referralVisualSize * 0.06),
-                },
-              ]}
-            >
-              <View style={styles.phoneScreen}>
-                <View style={styles.phoneTopBar} />
-                <View style={styles.phoneDot} />
-              </View>
-            </View>
+          <View style={[styles.referralVisual, { width: layout.referralVisualSize * 1.2, height: layout.referralVisualSize }]}>
+            <Image source={ReferPerson} style={styles.referralImage} resizeMode="contain" />
           </View>
         </Pressable>
       </View>
@@ -222,36 +201,6 @@ function Meta({ label, icon }: { label: string; icon: string }) {
     </View>
   );
 }
-
-const fallbackStations: PickupStation[] = [
-  {
-    id: '1',
-    name: 'Central Plaza Station',
-    address: 'MC Road, Sector 14',
-    distance: '0.2 km',
-    available: 8,
-    battery: '92%',
-    parking: 'Covered Parking',
-  },
-  {
-    id: '2',
-    name: 'Uptown Junction',
-    address: 'Ring Road, Block B',
-    distance: '0.5 km',
-    available: 6,
-    battery: '88%',
-    parking: 'Street Parking',
-  },
-  {
-    id: '3',
-    name: 'City Center Hub',
-    address: 'Main Market Road',
-    distance: '0.8 km',
-    available: 4,
-    battery: '95%',
-    parking: 'Covered Parking',
-  },
-];
 
 const mapPins = [
   { id: '1', left: 26, top: 60 },
@@ -286,12 +235,10 @@ const styles = StyleSheet.create({
   locationIcon: {
     width: 24,
     height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.72)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 8,
-    marginTop: 1,
+    marginTop: 2,
   },
   locationIconText: {
     color: COLORS.textPrimary,
@@ -311,33 +258,52 @@ const styles = StyleSheet.create({
   walletChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.82)',
+    gap: 4,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.92)',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    shadowColor: '#d9b7ab',
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 4 },
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    paddingHorizontal: 12,
+    height: 35,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 0 },
   },
   walletIcon: {
     marginRight: 6,
   },
   walletText: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontWeight: '800',
+    color: '#1c1c1e',
+    fontSize: 14,
+    fontWeight: '600',
   },
   mapCard: {
     height: 248,
     borderRadius: 24,
     overflow: 'hidden',
-    backgroundColor: '#f6efe8',
+    backgroundColor: '#f4f4f4',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.82)',
     marginBottom: 14,
+  },
+  mapImage: {
+    opacity: 0.85,
+  },
+  pinBadgeImage: {
+    width: 32,
+    height: 32,
+  },
+  centerPinImage: {
+    width: 36,
+    height: 36,
+  },
+  referralImage: {
+    position: 'absolute',
+    right: -6,
+    bottom: -6,
+    width: '100%',
+    height: '130%',
   },
   mapBase: {
     ...StyleSheet.absoluteFillObject,
@@ -433,17 +399,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   bookButton: {
-    height: 54,
-    borderRadius: 16,
-    backgroundColor: COLORS.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    shadowColor: COLORS.button,
+    marginBottom: 8,
+    shadowColor: '#fc4c02',
     shadowOpacity: 0.26,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 10 },
-    marginBottom: 8,
   },
   bookButtonIcon: {
     color: '#fff',
@@ -453,8 +413,10 @@ const styles = StyleSheet.create({
   },
   bookButtonText: {
     color: '#fff',
-    fontSize: 17,
-    fontWeight: '900',
+    fontSize: 18,
+    fontWeight: '600',
+    letterSpacing: 0.2,
+    lineHeight: 28,
   },
   sectionRow: {
     flexDirection: 'row',
@@ -477,6 +439,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 10,
     gap: 10,
+  },
+  emptyStateCard: {
+    minHeight: 180,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.92)',
+    padding: 18,
+    justifyContent: 'center',
+  },
+  emptyStateTitle: {
+    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  emptyStateText: {
+    marginTop: 6,
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
   },
   stationCard: {
     width: 220,
@@ -609,25 +591,22 @@ const styles = StyleSheet.create({
   },
   shareButton: {
     alignSelf: 'flex-start',
-    borderRadius: 14,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: COLORS.button,
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    paddingHorizontal: 14,
+    borderColor: '#ff7a45',
+    backgroundColor: 'transparent',
+    paddingHorizontal: 16,
     paddingVertical: 8,
+    height: 40,
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  shareButtonIcon: {
-    color: COLORS.button,
-    fontSize: 11,
-    fontWeight: '900',
-    marginRight: 6,
+    gap: 6,
   },
   shareButtonText: {
-    color: COLORS.button,
-    fontSize: 11,
-    fontWeight: '800',
+    color: '#ff7a45',
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 22,
   },
   referralVisual: {
     width: 84,

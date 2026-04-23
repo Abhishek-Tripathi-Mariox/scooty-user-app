@@ -1,12 +1,10 @@
-import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { PageFrame } from '../components/PageFrame';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { COLORS } from '../constants/theme';
-import { formatCurrency } from '../utils/format';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
+import { AppBackground } from '../components/AppBackground';
+import { GradientButton } from '../components/GradientButton';
+import { CheckIcon, ClockIcon, ShieldIcon } from '../components/RideIcons';
 
 export function RideCompletedScreen({
-  onBack,
   onHome,
   onRate,
   duration,
@@ -22,67 +20,94 @@ export function RideCompletedScreen({
   fare?: number;
   securityDeposit?: number;
 }) {
-  const totalFare = fare || 153;
+  const durationText = duration || '—';
+  const distanceText = distance != null ? `${distance.toFixed(1)} km` : '—';
+  const baseFare = fare ?? 0;
+  const distanceFare = 0;
+  const timeFare = 0;
+  const total = fare ?? baseFare;
+  const deposit = securityDeposit ?? 1000;
 
   return (
-    <View style={styles.root}>
-      <PageFrame title="" onBack={onBack} scroll={false}>
-        <View style={styles.content}>
-          <View style={styles.successIcon}>
-            <Text style={styles.successMark}>✓</Text>
+    <SafeAreaView style={styles.safe}>
+      <AppBackground variant="auth" />
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.successCircle}>
+          <CheckIcon size={48} color="#16a34a" />
+        </View>
+
+        <Text style={styles.title}>Ride Completed!</Text>
+        <Text style={styles.subtitle}>Hope you had a great ride</Text>
+
+        <View style={styles.card}>
+          <View style={styles.summaryRow}>
+            <Metric icon={<ClockIcon size={22} color="#363636" />} label="Duration" value={durationText} />
+            <Metric icon={<ArrowUpRight color="#363636" />} label="Distance" value={distanceText} />
           </View>
 
-          <Text style={styles.title}>Ride Completed!</Text>
-          <Text style={styles.subtitle}>Hope you had a great ride</Text>
+          <View style={styles.divider} />
 
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryRow}>
-              <Metric icon="⏱" label="Duration" value={duration || '18:45'} />
-              <Metric icon="◈" label="Distance" value={`${distance || 6.5} km`} />
-            </View>
-
-            <View style={styles.breakdownSection}>
-              <Text style={styles.breakdownTitle}>Fare Breakdown</Text>
-              <LineItem label="Base Fare" value="₹45" />
-              <LineItem label="Distance Fare" value="₹52" />
-              <LineItem label="Time Fare" value="₹56" />
-
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>{formatCurrency(totalFare)}</Text>
-              </View>
-            </View>
-
-            <View style={styles.walletCard}>
-              <Text style={styles.walletLabel}>Paid via Wallet</Text>
-              <Text style={styles.walletValue}>{formatCurrency(totalFare)}</Text>
-            </View>
-          </View>
-
-          <Pressable style={styles.receiptButton} onPress={() => {}}>
-            <Text style={styles.receiptText}>⬇ Download Receipt</Text>
-          </Pressable>
-
-          <View style={styles.footerCard}>
-            <PrimaryButton label="Rate Your Ride" onPress={onRate} style={styles.rateButton} />
-
-            <Pressable onPress={onHome} style={styles.backHomeButton}>
-              <Text style={styles.backHomeText}>Back to Home</Text>
-            </Pressable>
+          <Text style={styles.sectionTitle}>Fare Breakdown</Text>
+          <FareRow label="Base Fare" value={`₹${baseFare}`} />
+          <FareRow label="Distance Fare" value={`₹${distanceFare}`} />
+          <FareRow label="Time Fare" value={`₹${timeFare}`} />
+          <View style={styles.divider} />
+          <View style={styles.totalRow}>
+            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalValue}>₹{total}</Text>
           </View>
         </View>
-      </PageFrame>
-    </View>
+
+        <View style={styles.walletCard}>
+          <Text style={styles.walletLabel}>Paid via Wallet</Text>
+          <Text style={styles.walletValue}>₹{total}</Text>
+        </View>
+
+        <View style={styles.depositCard}>
+          <View style={styles.depositRow}>
+            <View style={styles.depositIcon}>
+              <ShieldIcon size={22} color="#ffffff" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.depositLabel}>Security Deposit</Text>
+              <Text style={styles.depositAmount}>₹{deposit}</Text>
+              <View style={styles.refundBadge}>
+                <CheckIcon size={14} color="#ffffff" />
+                <Text style={styles.refundText}>Refund Initiated</Text>
+              </View>
+            </View>
+            <ArrowRight color="#363636" />
+          </View>
+          <View style={styles.depositDivider} />
+          <Text style={styles.depositNote}>✓ Refund processing - Expected in 3-5 business days</Text>
+        </View>
+
+        <Pressable style={styles.downloadButton}>
+          <DownloadIcon color="#fc4c02" />
+          <Text style={styles.downloadText}>Download Receipt</Text>
+        </Pressable>
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <GradientButton label="Rate Your Ride" onPress={onRate} height={52} />
+        <Pressable style={styles.backHome} onPress={onHome}>
+          <Text style={styles.backHomeText}>Back to Home</Text>
+        </Pressable>
+      </View>
+    </SafeAreaView>
   );
 }
 
-function Metric({ icon, label, value }: { icon: string; label: string; value: string }) {
+function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <View style={styles.metricCard}>
-      <View style={styles.metricIcon}>
-        <Text style={styles.metricIconText}>{icon}</Text>
-      </View>
-      <View style={styles.metricTextWrap}>
+    <View style={styles.metric}>
+      <View style={styles.metricIcon}>{icon}</View>
+      <View>
         <Text style={styles.metricLabel}>{label}</Text>
         <Text style={styles.metricValue}>{value}</Text>
       </View>
@@ -90,187 +115,280 @@ function Metric({ icon, label, value }: { icon: string; label: string; value: st
   );
 }
 
-function LineItem({ label, value }: { label: string; value: string }) {
+function FareRow({ label, value }: { label: string; value: string }) {
   return (
-    <View style={styles.lineItem}>
-      <Text style={styles.lineLabel}>{label}</Text>
-      <Text style={styles.lineValue}>{value}</Text>
+    <View style={styles.fareRow}>
+      <Text style={styles.fareLabel}>{label}</Text>
+      <Text style={styles.fareValue}>{value}</Text>
     </View>
   );
 }
 
+function ArrowUpRight({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 22 22" fill="none">
+      <Path d="M6 16 16 6M8 6h8v8" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function ArrowRight({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 22 22" fill="none">
+      <Path d="M5 11h12m0 0-5-5m5 5-5 5" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function DownloadIcon({ color }: { color: string }) {
+  return (
+    <Svg width={18} height={18} viewBox="0 0 18 18" fill="none">
+      <Path d="M9 2v10m0 0 4-4m-4 4-4-4M3 14v2h12v-2" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
 const styles = StyleSheet.create({
-  root: {
+  safe: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#ffd1b0',
   },
-  content: {
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 150,
     alignItems: 'center',
-    paddingBottom: 18,
-    paddingTop: 8,
   },
-  successIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  successCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#dcfce7',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
-  },
-  successMark: {
-    fontSize: 34,
-    color: '#16a34a',
-    fontWeight: '900',
   },
   title: {
-    color: COLORS.textPrimary,
-    fontSize: 22,
-    fontWeight: '900',
+    marginTop: 24,
+    color: '#101828',
+    fontSize: 30,
+    fontWeight: '700',
+    lineHeight: 36,
+    textAlign: 'center',
   },
   subtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    marginTop: 6,
-    marginBottom: 16,
+    marginTop: 8,
+    color: '#363636',
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'center',
   },
-  summaryCard: {
+  card: {
+    marginTop: 24,
     width: '100%',
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.84)',
-    padding: 14,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderRadius: 24,
+    paddingVertical: 24,
+    paddingHorizontal: 24,
     gap: 12,
   },
   summaryRow: {
     flexDirection: 'row',
-    gap: 10,
+    justifyContent: 'space-between',
   },
-  metricCard: {
-    flex: 1,
+  metric: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 245, 238, 0.62)',
-    padding: 10,
+    gap: 12,
   },
   metricIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
-  },
-  metricIconText: {
-    color: COLORS.textPrimary,
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  metricTextWrap: {
-    flex: 1,
   },
   metricLabel: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
   },
   metricValue: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '900',
-    marginTop: 2,
+    color: '#363636',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 26,
   },
-  breakdownSection: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(33, 48, 74, 0.08)',
-    paddingTop: 12,
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.12)',
   },
-  breakdownTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '900',
-    marginBottom: 8,
+  sectionTitle: {
+    color: '#363636',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 27,
   },
-  lineItem: {
+  fareRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+    alignItems: 'center',
   },
-  lineLabel: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
+  fareLabel: {
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
   },
-  lineValue: {
-    color: COLORS.textPrimary,
-    fontSize: 11,
-    fontWeight: '700',
+  fareValue: {
+    color: '#363636',
+    fontSize: 14,
+    lineHeight: 20,
   },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(33, 48, 74, 0.08)',
-    paddingTop: 10,
-    marginTop: 4,
+    alignItems: 'center',
   },
   totalLabel: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '900',
+    color: '#363636',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 28,
   },
   totalValue: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '900',
+    color: '#363636',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 28,
   },
   walletCard: {
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.82)',
+    marginTop: 16,
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
-    borderColor: 'rgba(33, 48, 74, 0.05)',
-    padding: 14,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderRadius: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    gap: 4,
   },
   walletLabel: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
+    color: '#364153',
+    fontSize: 14,
+    lineHeight: 20,
   },
   walletValue: {
-    color: COLORS.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
-    marginTop: 4,
+    color: '#363636',
+    fontSize: 24,
+    fontWeight: '700',
+    lineHeight: 32,
   },
-  receiptButton: {
+  depositCard: {
+    marginTop: 16,
     width: '100%',
-    marginTop: 14,
-    borderRadius: 18,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
-    borderColor: COLORS.button,
-    paddingVertical: 12,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderRadius: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  depositRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    gap: 12,
   },
-  receiptText: {
-    color: COLORS.button,
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  footerCard: {
-    width: '100%',
-    paddingTop: 18,
-  },
-  rateButton: {
-    width: '100%',
-  },
-  backHomeButton: {
+  depositIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#00a63e',
     alignItems: 'center',
-    paddingVertical: 12,
+    justifyContent: 'center',
+  },
+  depositLabel: {
+    color: '#364153',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  depositAmount: {
+    color: '#00a63e',
+    fontSize: 20,
+    fontWeight: '700',
+    lineHeight: 28,
+    marginTop: 2,
+  },
+  refundBadge: {
+    marginTop: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#16a34a',
+    borderRadius: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+  },
+  refundText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 14,
+  },
+  depositDivider: {
+    height: 1,
+    backgroundColor: 'rgba(218, 218, 218, 0.5)',
+  },
+  depositNote: {
+    color: '#016630',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  downloadButton: {
+    marginTop: 16,
+    width: '100%',
+    height: 37,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#fc4c02',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  downloadText: {
+    color: '#fc4c02',
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 24,
+  },
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 17,
+    paddingBottom: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderTopWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    gap: 12,
+  },
+  backHome: {
+    alignItems: 'center',
+    paddingVertical: 6,
   },
   backHomeText: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
+    color: '#808080',
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 24,
   },
 });

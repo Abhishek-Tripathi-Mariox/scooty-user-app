@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
-import { Image, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
-import { ScreenSurface } from '../components/ScreenSurface';
-import { COLORS } from '../constants/theme';
-import { useResponsiveLayout } from '../utils/responsive';
+import { useState } from 'react';
+import { Image, SafeAreaView, StyleSheet, Switch, Text, View } from 'react-native';
+import { AppBackground } from '../components/AppBackground';
+import { GradientButton } from '../components/GradientButton';
+
 const LocationIcon = require('../assets/images/location.png');
 const CameraIcon = require('../assets/images/camera.png');
 const PushNotificationIcon = require('../assets/images/pushnotification.png');
 
+type PermissionKey = 'location' | 'camera' | 'notifications';
+
 type PermissionItem = {
-  key: 'location' | 'camera' | 'notifications';
+  key: PermissionKey;
   title: string;
   subtitle: string;
   icon: number;
@@ -19,7 +21,7 @@ const permissions: PermissionItem[] = [
   {
     key: 'location',
     title: 'Location Access',
-    subtitle: 'Required to find nearby scooties and stations',
+    subtitle: 'Required to find nearby scooters and stations',
     icon: LocationIcon,
     required: true,
   },
@@ -41,183 +43,182 @@ export function PermissionsScreen({
   onContinue,
   initialPermissions,
 }: {
-  onContinue: (permissions: Record<PermissionItem['key'], boolean>) => void;
-  initialPermissions?: Partial<Record<PermissionItem['key'], boolean>>;
+  onContinue: (permissions: Record<PermissionKey, boolean>) => void;
+  initialPermissions?: Partial<Record<PermissionKey, boolean>>;
 }) {
-  const [enabled, setEnabled] = useState<Record<PermissionItem['key'], boolean>>({
+  const [enabled, setEnabled] = useState<Record<PermissionKey, boolean>>({
     location: initialPermissions?.location ?? true,
     camera: initialPermissions?.camera ?? true,
     notifications: initialPermissions?.notifications ?? true,
   });
-  const layout = useResponsiveLayout();
 
   return (
-    <ScreenSurface>
-      <View style={[styles.root, { paddingHorizontal: layout.screenX }]}>
-        <View style={styles.centerBlock}>
-          <View style={styles.topIcon}>
-            <Text style={styles.topIconText}>✓</Text>
+    <SafeAreaView style={styles.safe}>
+      <AppBackground variant="auth" />
+      <View style={styles.content}>
+        <View style={styles.headerBlock}>
+          <View style={styles.checkCircle}>
+            <View style={styles.checkInner}>
+              <Text style={styles.checkMark}>✓</Text>
+            </View>
           </View>
-
           <Text style={styles.title}>Enable Permissions</Text>
-          <Text style={styles.subtitle}>We need a few permissions to provide you the best experience</Text>
+          <Text style={styles.subtitle}>
+            We need a few permissions to provide you the best experience
+          </Text>
+        </View>
 
-          <View style={styles.cardList}>
-            {permissions.map((item) => (
-              <View key={item.key} style={styles.permissionCard}>
-                <View style={styles.permissionLeft}>
-                  <View style={styles.iconWrap}>
-                    <Image source={item.icon} style={styles.iconImage} resizeMode="contain" />
-                  </View>
-
-                  <View style={styles.textWrap}>
-                    <Text style={styles.permissionTitle}>
-                      {item.title} {item.required ? <Text style={styles.required}>*Required</Text> : null}
-                    </Text>
-                    <Text style={styles.permissionSubtitle}>{item.subtitle}</Text>
-                  </View>
-                </View>
-
-                <Switch
-                  value={enabled[item.key]}
-                  onValueChange={(value) =>
-                    setEnabled((current) => ({
-                      ...current,
-                      [item.key]: value,
-                    }))
-                  }
-                  trackColor={{ false: '#cfe7d1', true: '#42c15a' }}
-                  thumbColor="#fff"
-                />
+        <View style={styles.cardList}>
+          {permissions.map((item) => (
+            <View key={item.key} style={styles.card}>
+              <View style={styles.iconWrap}>
+                <Image source={item.icon} style={styles.iconImage} resizeMode="contain" />
               </View>
-            ))}
-          </View>
+
+              <View style={styles.textWrap}>
+                <View style={styles.titleRow}>
+                  <Text style={styles.cardTitle}>{item.title}</Text>
+                  {item.required ? <Text style={styles.required}>*Required</Text> : null}
+                </View>
+                <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+              </View>
+
+              <Switch
+                value={enabled[item.key]}
+                onValueChange={(value) =>
+                  setEnabled((current) => ({ ...current, [item.key]: value }))
+                }
+                trackColor={{ false: '#d1d5db', true: '#86c599' }}
+                thumbColor={enabled[item.key] ? '#16a34a' : '#ffffff'}
+                ios_backgroundColor="#d1d5db"
+              />
+            </View>
+          ))}
         </View>
 
         <View style={styles.footer}>
-          <Pressable style={styles.button} onPress={() => onContinue(enabled)}>
-            <Text style={styles.buttonText}>Continue to Home</Text>
-          </Pressable>
+          <GradientButton
+            label="Continue to Home"
+            onPress={() => onContinue(enabled)}
+            height={52}
+          />
         </View>
       </View>
-    </ScreenSurface>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  safe: {
     flex: 1,
-    paddingTop: 8,
-    paddingBottom: 8,
+    backgroundColor: '#ffd1b0',
   },
-  centerBlock: {
+  content: {
     flex: 1,
-    paddingHorizontal: 10,
-    paddingTop: 10,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 16,
   },
-  topIcon: {
-    alignSelf: 'center',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.72)',
+  headerBlock: {
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  checkCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.53)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 18,
   },
-  topIconText: {
-    color: '#16a34a',
-    fontSize: 26,
+  checkInner: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#16a34a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkMark: {
+    color: '#ffffff',
+    fontSize: 20,
     fontWeight: '900',
-    marginTop: -1,
+    lineHeight: 22,
   },
   title: {
-    textAlign: 'center',
-    color: COLORS.textPrimary,
-    fontSize: 22,
-    fontWeight: '900',
+    marginTop: 16,
+    color: '#101828',
+    fontSize: 24,
+    fontWeight: '600',
+    lineHeight: 32,
   },
   subtitle: {
-    textAlign: 'center',
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    lineHeight: 19,
     marginTop: 8,
-    marginBottom: 18,
+    maxWidth: 328,
+    color: '#4a5565',
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: 'center',
   },
   cardList: {
     gap: 16,
   },
-  permissionCard: {
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.62)',
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.78)',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    shadowColor: '#e7bfb0',
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-  },
-  permissionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    paddingRight: 12,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    paddingVertical: 18,
+    paddingHorizontal: 18,
   },
   iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.86)',
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 16,
   },
   iconImage: {
-    width: 20,
-    height: 20,
+    width: 28,
+    height: 28,
   },
   textWrap: {
     flex: 1,
+    paddingRight: 8,
   },
-  permissionTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '800',
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  cardTitle: {
+    color: '#101828',
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 24,
   },
   required: {
-    color: '#ef4444',
-    fontSize: 11,
-    fontWeight: '900',
-  },
-  permissionSubtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
+    marginLeft: 8,
+    color: '#fb2c36',
+    fontSize: 12,
     lineHeight: 16,
-    marginTop: 6,
+  },
+  cardSubtitle: {
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
   },
   footer: {
-    paddingTop: 18,
-  },
-  button: {
-    borderRadius: 12,
-    backgroundColor: COLORS.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    shadowColor: COLORS.button,
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 8 },
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '800',
+    marginTop: 'auto',
+    paddingTop: 24,
+    paddingHorizontal: 0,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    padding: 24,
   },
 });

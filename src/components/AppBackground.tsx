@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop, Circle } from 'react-native-svg';
 
-type BackgroundVariant = 'default' | 'auth' | 'otp';
+type BackgroundVariant = 'default' | 'auth' | 'otp' | 'splash';
 
 const VARIANTS: Record<
   BackgroundVariant,
@@ -38,6 +38,14 @@ const VARIANTS: Record<
     bottom: '#d3dae5',
     topRight: '#ecd9cc',
     bottomLeft: '#e7cfd6',
+  },
+  splash: {
+    base: '#ffd1b0',
+    top: '#ffe1cb',
+    mid: '#f6d4d2',
+    bottom: '#cdd6e5',
+    topRight: '#ffd1b0',
+    bottomLeft: '#b9c4dc',
   },
 };
 

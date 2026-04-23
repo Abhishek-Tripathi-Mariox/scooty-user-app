@@ -1,10 +1,37 @@
-import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { PageFrame } from '../components/PageFrame';
-import { COLORS } from '../constants/theme';
+import {
+  Image,
+  ImageBackground,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { AppBackground } from '../components/AppBackground';
+import { GradientButton } from '../components/GradientButton';
+import {
+  AddressPinIcon,
+  ArrowLeftIcon,
+  BatteryIcon,
+  FilterIcon,
+  SmallScooterIcon,
+  WalkerIcon,
+} from '../components/RideIcons';
 import type { StationItem } from '../services/userApi';
 
-const ScootyImage = require('../assets/images/scooty.png');
+const MapBackground = require('../assets/images/explore-map-bg.png');
+const StationThumb = require('../assets/images/station-thumb.jpg');
+const ScootyMarker = require('../assets/images/scooty-marker.png');
+const RedPin = require('../assets/images/red-pin.png');
+
+const MAP_PINS = [
+  { left: 68, top: 130 },
+  { left: 290, top: 88 },
+  { left: 280, top: 182 },
+  { left: 150, top: 196 },
+  { left: 172, top: 80 },
+];
 
 export function SearchScreen({
   onBack,
@@ -21,240 +48,366 @@ export function SearchScreen({
   onSelectStation?: (station: StationItem) => void;
   onContinue?: () => void;
 }) {
-  const items = stations && stations.length > 0 ? stations : demoStations;
+  const items = stations ?? [];
+  const activeId = selectedStationId || items[0]?._id || null;
 
   return (
-    <View style={styles.root}>
-      <PageFrame title="Explore Scooty" onBack={onBack} scroll>
-        <View style={styles.content}>
-          <View style={styles.mapCard}>
-            <View style={styles.mapGrid} />
-            <View style={styles.mapPin} />
+    <SafeAreaView style={styles.safe}>
+      <AppBackground variant="auth" />
+
+      <ImageBackground source={MapBackground} style={styles.map} imageStyle={styles.mapImage} resizeMode="cover">
+        {MAP_PINS.map((pin, idx) => (
+          <Image
+            key={idx}
+            source={ScootyMarker}
+            style={[styles.pin, { left: pin.left, top: pin.top }]}
+            resizeMode="contain"
+          />
+        ))}
+        <Image source={RedPin} style={styles.centerPin} resizeMode="contain" />
+      </ImageBackground>
+
+      <View style={styles.header} pointerEvents="box-none">
+        <Pressable onPress={onBack} style={styles.backButton}>
+          <ArrowLeftIcon size={24} color="#0f172a" />
+        </Pressable>
+        <Text style={styles.headerTitle}>Explore Scooty</Text>
+      </View>
+
+      <View style={styles.filtersBlock}>
+        <View style={styles.filterTitleRow}>
+          <FilterIcon size={18} color="#fc4c02" />
+          <Text style={styles.filterTitle}>Filters</Text>
+        </View>
+
+        <View style={styles.sliderRow}>
+          <View style={styles.sliderCol}>
+            <Text style={styles.sliderLabel}>Min Battery: 67%</Text>
+            <View style={styles.sliderTrack}>
+              <View style={[styles.sliderFill, { width: '67%' }]} />
+              <View style={[styles.sliderThumb, { left: '64%' }]} />
+            </View>
           </View>
-
-          <View style={styles.filterRow}>
-            <Text style={styles.filterIcon}>⏳</Text>
-            <Text style={styles.filterText}>Filters</Text>
-            <View style={styles.filterSpacer} />
-            <Text style={styles.filterMeta}>Min Battery: 67%</Text>
-            <Text style={styles.filterMeta}>Max Distance: 5 km</Text>
+          <View style={styles.sliderCol}>
+            <Text style={styles.sliderLabel}>Max Distance: 5 km</Text>
+            <View style={styles.sliderTrack}>
+              <View style={[styles.sliderFill, { width: '72%' }]} />
+              <View style={[styles.sliderThumb, { left: '69%' }]} />
+            </View>
           </View>
+        </View>
+      </View>
 
-          <View style={styles.sliderTrack}>
-            <View style={styles.sliderFill} />
-            <View style={styles.sliderThumb} />
+      <ScrollView
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {loading ? (
+          <Text style={styles.loadingText}>Loading stations...</Text>
+        ) : items.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>No live stations found</Text>
+            <Text style={styles.emptyBody}>The backend did not return any available stations for this area yet.</Text>
           </View>
-
-          <View style={styles.stationList}>
-            {loading ? (
-              <Text style={styles.loadingText}>Loading stations...</Text>
-            ) : (
-              items.map((station) => (
-                <Pressable
-                  key={station._id}
-                  onPress={() => onSelectStation?.(station)}
-                  style={[styles.stationCard, selectedStationId === station._id && styles.stationCardActive]}
-                >
-                  <Image source={ScootyImage} style={styles.stationImage} resizeMode="cover" />
-                  <View style={styles.stationBody}>
-                    <Text style={styles.stationName}>{station.name || 'Central Plaza Station'}</Text>
-                    <Text style={styles.stationAddress}>{station.address || 'MC Road, Sector 14'}</Text>
-
-                    <View style={styles.metaRow}>
-                      <Meta label={`Available ${station.availableScooties ?? 0}`} />
-                      <Meta label="Avg Battery 92%" />
-                      <Meta label={station.distanceKm != null ? `Distance ${station.distanceKm.toFixed(1)} km` : 'Distance 0.0 km'} />
+        ) : (
+          items.map((station) => {
+            const active = station._id === activeId;
+            const distance =
+              station.distanceKm != null ? `${station.distanceKm.toFixed(1)} km` : '—';
+            return (
+              <Pressable
+                key={station._id}
+                onPress={() => onSelectStation?.(station)}
+                style={[styles.card, active && styles.cardActive]}
+              >
+                <View style={styles.cardTop}>
+                  <Image source={StationThumb} style={styles.cardThumb} resizeMode="cover" />
+                  <View style={styles.cardText}>
+                    <Text style={styles.stationName}>{station.name || 'Station unavailable'}</Text>
+                    <View style={styles.addressRow}>
+                      <AddressPinIcon size={14} color="#4a5565" />
+                      <Text style={styles.addressText}>{station.address || 'Address unavailable'}</Text>
                     </View>
                   </View>
-                </Pressable>
-              ))
-            )}
-          </View>
+                </View>
 
-          <Pressable style={styles.continueButton} onPress={onContinue}>
-            <Text style={styles.continueText}>Continue to Book</Text>
-          </Pressable>
-        </View>
-      </PageFrame>
-    </View>
+                <View style={styles.divider} />
+
+                <View style={styles.statsRow}>
+                  <Stat
+                    icon={<SmallScooterIcon size={18} color="#16a34a" />}
+                    label="Available"
+                    value={String(station.availableScooties ?? 0)}
+                  />
+                  <Stat
+                    icon={<BatteryIcon size={18} color="#16a34a" />}
+                    label="Avg Battery"
+                    value="—"
+                  />
+                  <Stat
+                    icon={<WalkerIcon size={18} color="#4a5565" />}
+                    label="Distance"
+                    value={distance}
+                  />
+                </View>
+              </Pressable>
+            );
+          })
+        )}
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <GradientButton label="Continue to Book" onPress={() => onContinue?.()} height={52} />
+      </View>
+    </SafeAreaView>
   );
 }
 
-function Meta({ label }: { label: string }) {
+function Stat({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
   return (
-    <View style={styles.metaItem}>
-      <Text style={styles.metaText}>{label}</Text>
+    <View style={styles.statBlock}>
+      <View style={styles.statRow}>
+        {icon}
+        <Text style={styles.statLabel}>{label}</Text>
+      </View>
+      <Text style={styles.statValue}>{value}</Text>
     </View>
   );
 }
-
-const demoStations: StationItem[] = [
-  {
-    _id: 'st1',
-    name: 'Central Plaza Station',
-    address: 'MC Road, Sector 14',
-    availableScooties: 8,
-  },
-  {
-    _id: 'st2',
-    name: 'Central Plaza Station',
-    address: 'MC Road, Sector 14',
-    availableScooties: 8,
-  },
-  {
-    _id: 'st3',
-    name: 'Central Plaza Station',
-    address: 'MC Road, Sector 14',
-    availableScooties: 8,
-  },
-];
 
 const styles = StyleSheet.create({
-  root: {
+  safe: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#ffd1b0',
   },
-  content: {
-    paddingBottom: 18,
+  map: {
+    height: 272,
+    width: '100%',
   },
-  mapCard: {
-    height: 184,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.84)',
-    overflow: 'hidden',
-    marginBottom: 12,
+  mapImage: {
+    opacity: 0.4,
   },
-  mapGrid: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 240, 230, 0.86)',
+  pin: {
+    position: 'absolute',
+    width: 32,
+    height: 32,
   },
-  mapPin: {
+  centerPin: {
     position: 'absolute',
     left: '50%',
-    top: '50%',
-    marginLeft: -8,
-    marginTop: -8,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#ff5d0f',
-    borderWidth: 3,
-    borderColor: 'rgba(255,255,255,0.94)',
+    top: 138,
+    marginLeft: -18,
+    width: 36,
+    height: 36,
   },
-  filterRow: {
+  header: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 8,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.26)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.6)',
   },
-  filterIcon: {
-    color: COLORS.button,
-    fontSize: 13,
-    fontWeight: '900',
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
   },
-  filterText: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '900',
+  headerTitle: {
+    marginLeft: 8,
+    color: '#0f172a',
+    fontSize: 21,
+    fontWeight: '500',
+    lineHeight: 32,
   },
-  filterSpacer: {
-    flexBasis: '100%',
-    height: 0,
+  filtersBlock: {
+    paddingHorizontal: 21,
+    paddingTop: 14,
   },
-  filterMeta: {
-    color: COLORS.textSecondary,
-    fontSize: 10,
+  filterTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginBottom: 10,
+  },
+  filterTitle: {
+    color: '#0f172a',
+    fontSize: 16,
     fontWeight: '600',
+    lineHeight: 24,
+  },
+  sliderRow: {
+    flexDirection: 'row',
+    gap: 14,
+  },
+  sliderCol: {
+    flex: 1,
+    gap: 6,
+  },
+  sliderLabel: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 18,
   },
   sliderTrack: {
     height: 4,
     borderRadius: 999,
-    backgroundColor: 'rgba(33, 48, 74, 0.12)',
-    marginBottom: 14,
+    backgroundColor: 'rgba(15, 23, 42, 0.12)',
+    position: 'relative',
+    marginTop: 6,
   },
   sliderFill: {
-    width: '72%',
     height: 4,
     borderRadius: 999,
-    backgroundColor: COLORS.button,
+    backgroundColor: '#fc4c02',
   },
   sliderThumb: {
     position: 'absolute',
-    left: '68%',
-    top: -6,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: COLORS.button,
+    top: -5,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#fc4c02',
+    borderWidth: 2,
+    borderColor: '#ffffff',
   },
-  stationList: {
-    gap: 10,
+  list: {
+    flex: 1,
+    marginTop: 16,
+  },
+  listContent: {
+    paddingHorizontal: 15,
+    paddingBottom: 120,
+    gap: 16,
   },
   loadingText: {
-    color: COLORS.textSecondary,
+    color: '#4a5565',
     fontSize: 12,
     textAlign: 'center',
     paddingVertical: 20,
   },
-  stationCard: {
-    flexDirection: 'row',
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.72)',
+  emptyState: {
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.84)',
+    borderColor: '#ffffff',
+    padding: 18,
+    gap: 6,
+  },
+  emptyTitle: {
+    color: '#363636',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  emptyBody: {
+    color: '#4a5565',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  card: {
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 1,
+    borderColor: '#ffffff',
     padding: 10,
+    gap: 10,
+  },
+  cardActive: {
+    borderColor: '#fc4e05',
+  },
+  cardTop: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
   },
-  stationCardActive: {
-    borderColor: COLORS.button,
-    backgroundColor: 'rgba(255, 100, 28, 0.08)',
+  cardThumb: {
+    width: 71,
+    height: 70,
+    borderRadius: 11,
   },
-  stationImage: {
-    width: 64,
-    height: 64,
-    borderRadius: 14,
-    marginRight: 10,
-  },
-  stationBody: {
+  cardText: {
     flex: 1,
+    gap: 6,
   },
   stationName: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '900',
+    color: '#363636',
+    fontSize: 18,
+    fontWeight: '500',
+    lineHeight: 22,
   },
-  stationAddress: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    marginTop: 2,
-  },
-  metaRow: {
+  addressRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-  },
-  metaItem: {
-    paddingHorizontal: 0,
-  },
-  metaText: {
-    color: COLORS.textSecondary,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  continueButton: {
-    marginTop: 14,
-    borderRadius: 14,
-    backgroundColor: COLORS.button,
     alignItems: 'center',
-    paddingVertical: 13,
+    gap: 5,
   },
-  continueText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '800',
+  addressText: {
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-start',
+    paddingTop: 2,
+  },
+  statBlock: {
+    flex: 1,
+    gap: 4,
+  },
+  statRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statLabel: {
+    color: '#6a7282',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  statValue: {
+    color: '#363636',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+    marginLeft: 24,
+  },
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 24,
+    paddingTop: 25,
+    paddingBottom: 24,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
   },
 });

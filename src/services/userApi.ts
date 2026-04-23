@@ -1,5 +1,17 @@
-export const USER_API_BASE_URL: string = 'https://mira-ai.marioxsoftware.net/scooty/v1/api';
-const FALLBACK_USER_API_BASE_URL: string = 'https://mira-ai.marioxsoftware.net/v1/api';
+import { Platform } from 'react-native';
+
+const LOCAL_USER_API_BASE_URL =
+  Platform.select({
+    android: 'http://10.0.2.2:3000/v1/api',
+    ios: 'http://localhost:3000/v1/api',
+    default: 'http://localhost:3000/v1/api',
+  }) || 'http://localhost:3000/v1/api';
+
+const HOSTED_USER_API_BASE_URL: string = 'https://mira-ai.marioxsoftware.net/scooty/v1/api';
+const LEGACY_HOSTED_USER_API_BASE_URL: string = 'https://mira-ai.marioxsoftware.net/v1/api';
+
+export const USER_API_BASE_URL: string = HOSTED_USER_API_BASE_URL;
+const USER_API_BASE_URLS = [HOSTED_USER_API_BASE_URL, LEGACY_HOSTED_USER_API_BASE_URL, LOCAL_USER_API_BASE_URL];
 
 type JsonObject = Record<string, unknown>;
 
@@ -41,6 +53,47 @@ export type NotificationItem = {
   message: string;
   isRead?: boolean;
   createdAt?: string;
+};
+
+export type WalletTransactionItem = {
+  _id: string;
+  key?: string;
+  type: string;
+  direction?: 'DEBIT' | 'CREDIT';
+  status?: string;
+  amount: number;
+  taxAmount?: number;
+  commissionAmount?: number;
+  ownerAmount?: number;
+  platformAmount?: number;
+  sourceType?: string;
+  stationId?: string | null;
+  sourceId?: string | null;
+  bookingId?: string | null;
+  referenceId?: string;
+  description?: string;
+  currency?: string;
+  balanceBefore?: number | null;
+  balanceAfter?: number | null;
+  meta?: Record<string, unknown>;
+  createdAt?: string;
+};
+
+export type WalletSummary = {
+  balance: number;
+  referralEarnings: number;
+  recentCredits: Array<{
+    id: string;
+    title: string;
+    amount: number;
+    createdAt?: string;
+  }>;
+  activeReservations: Array<{
+    id: string;
+    title: string;
+    amount: number;
+    createdAt?: string;
+  }>;
 };
 
 export type RideItem = {
@@ -342,19 +395,26 @@ const requestWithBase = async <T>(baseUrl: string, path: string, options: Reques
 };
 
 const request = async <T>(path: string, options: RequestOptions = {}): Promise<T> => {
-  try {
-    return await requestWithBase<T>(USER_API_BASE_URL, path, options);
-  } catch (error) {
-    const isRouteNotFound =
-      error instanceof ApiError &&
-      /route not found/i.test(error.message);
+  let lastError: unknown = null;
 
-    if (!isRouteNotFound || FALLBACK_USER_API_BASE_URL === USER_API_BASE_URL) {
-      throw error;
+  for (const baseUrl of USER_API_BASE_URLS) {
+    try {
+      return await requestWithBase<T>(baseUrl, path, options);
+    } catch (error) {
+      lastError = error;
+
+      const message = error instanceof ApiError ? error.message : '';
+      const isRetryable =
+        error instanceof ApiError &&
+        (/route not found/i.test(message) || /cannot reach api/i.test(message));
+
+      if (!isRetryable) {
+        throw error;
+      }
     }
-
-    return await requestWithBase<T>(FALLBACK_USER_API_BASE_URL, path, options);
   }
+
+  throw lastError;
 };
 
 export const userApi = {
@@ -378,6 +438,8 @@ export const userApi = {
     request<{ user: User; dashboard: Dashboard }>('/user/me', { token }),
   me: (token: string) =>
     request<{ user: User; dashboard: Dashboard }>('/user/me', { token }),
+  wallet: (token: string) =>
+    request<{ wallet: WalletSummary }>('/user/wallet', { token }),
   updateProfile: (
     token: string,
     payload: Partial<User> & {
@@ -487,6 +549,24 @@ export const userApi = {
     request<{ notifications: NotificationItem[] }>('/user/notifications', {
       token,
       query: { type },
+    }),
+  transactions: (
+    token: string,
+    query: { type?: string; from?: string; to?: string; page?: number; limit?: number } = {},
+  ) =>
+    request<{
+      transactions: WalletTransactionItem[];
+      pagination?: {
+        page?: number;
+        limit?: number;
+        total?: number;
+        totalPages?: number;
+        hasNextPage?: boolean;
+        hasPrevPage?: boolean;
+      };
+    }>('/user/transactions', {
+      token,
+      query,
     }),
   markNotificationRead: (token: string, notificationId: string) =>
     request<{ notification: NotificationItem }>(`/user/notifications/${notificationId}/read`, {

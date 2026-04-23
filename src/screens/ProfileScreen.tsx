@@ -1,32 +1,33 @@
-import React from 'react';
 import {
-  Alert,
   Image,
   ImageSourcePropType,
   Pressable,
+  SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import { PageFrame } from '../components/PageFrame';
+import Svg, { Path } from 'react-native-svg';
+import { AppBackground } from '../components/AppBackground';
 import { BottomTabs, type TabKey } from '../components/BottomTabs';
-import { COLORS } from '../constants/theme';
+import { ArrowLeftIcon } from '../components/RideIcons';
 import type { Dashboard, User } from '../services/userApi';
 
 const DefaultAvatar = require('../assets/images/profile.png');
-const EditIcon = require('../assets/images/edit1.png');
 const LanguageIcon = require('../assets/images/language.png');
 const BookingIcon = require('../assets/images/booking.png');
 const RideHistoryIcon = require('../assets/images/ridehistory.png');
 const OfferIcon = require('../assets/images/offer.png');
 const HelpIcon = require('../assets/images/help.png');
 
+type ProfileMenuKey = 'language' | 'bookings' | 'history' | 'offers' | 'support';
+
 type ProfileMenuItem = {
-  key: 'language' | 'bookings' | 'history' | 'offers' | 'support';
+  key: ProfileMenuKey;
   title: string;
-  subtitle: string;
-  iconBg: string;
-  iconSource: ImageSourcePropType;
+  subtitle?: string;
+  icon: ImageSourcePropType;
 };
 
 export function ProfileScreen({
@@ -36,328 +37,279 @@ export function ProfileScreen({
   onEditProfile,
   onMenuPress,
   user,
-  dashboard,
   activeTab,
 }: {
   onBack: () => void;
   onTabPress: (tab: TabKey) => void;
   onLogout?: () => void;
   onEditProfile?: () => void;
-  onMenuPress?: (key: ProfileMenuItem['key']) => void;
+  onMenuPress?: (key: ProfileMenuKey) => void;
   user?: User | null;
   dashboard?: Dashboard | null;
   activeTab: TabKey;
 }) {
-  const name = user?.name?.trim() || '-';
-  const phone = user?.mobile ? formatPhone(user.mobile) : '+91 98765 43210';
-  const email = user?.email?.trim() || '-';
-  const initials = getInitials(name);
-  const avatarSource = getAvatarSource(user?.profilePhotoUrl);
+  const displayName = user?.name || 'Profile not set';
+  const displayPhone = user?.mobile ? `+91 ${user.mobile}` : 'Mobile number unavailable';
+  const displayEmail = user?.email || 'Email not added';
+  const avatarSource = user?.profilePhotoUrl ? { uri: user.profilePhotoUrl } : DefaultAvatar;
 
-  const menuItems: ProfileMenuItem[] = [
-    {
-      key: 'language',
-      title: 'Language',
-      subtitle: user?.settings?.language?.trim() || 'English',
-      iconBg: 'rgba(31, 102, 255, 0.10)',
-      iconSource: LanguageIcon,
-    },
-    {
-      key: 'bookings',
-      title: 'My Bookings',
-      subtitle: 'View your active and completed trips',
-      iconBg: 'rgba(95, 106, 125, 0.10)',
-      iconSource: BookingIcon,
-    },
-    {
-      key: 'history',
-      title: 'Ride History',
-      subtitle: dashboard ? `${dashboard.ridesCompleted || 0} rides completed` : 'Past rides and receipts',
-      iconBg: 'rgba(95, 106, 125, 0.10)',
-      iconSource: RideHistoryIcon,
-    },
-    {
-      key: 'offers',
-      title: 'Offers & Rewards',
-      subtitle: 'Save on your next ride',
-      iconBg: 'rgba(95, 106, 125, 0.10)',
-      iconSource: OfferIcon,
-    },
-    {
-      key: 'support',
-      title: 'Help & Support',
-      subtitle: 'FAQs, tickets and contact options',
-      iconBg: 'rgba(95, 106, 125, 0.10)',
-      iconSource: HelpIcon,
-    },
+  const firstItem: ProfileMenuItem = {
+    key: 'language',
+    title: 'Language',
+    subtitle: user?.settings?.language === 'hi' ? 'Hindi' : 'English',
+    icon: LanguageIcon,
+  };
+
+  const menu: ProfileMenuItem[] = [
+    { key: 'bookings', title: 'My Bookings', icon: BookingIcon },
+    { key: 'history', title: 'Ride History', icon: RideHistoryIcon },
+    { key: 'offers', title: 'Offers & Rewards', icon: OfferIcon },
+    { key: 'support', title: 'Help & Support', icon: HelpIcon },
   ];
 
   return (
-    <View style={styles.root}>
-      <PageFrame title="Profile" onBack={onBack} scroll>
-        <View style={styles.content}>
-          <View style={styles.profileCard}>
-            <View style={styles.profileRow}>
-              <View style={styles.avatarWrap}>
-                <Image source={avatarSource} style={styles.avatarImage} />
-                {!avatarSource ? (
-                  <View style={styles.initialsFallback}>
-                    <Text style={styles.initialsText}>{initials}</Text>
-                  </View>
-                ) : null}
-              </View>
+    <SafeAreaView style={styles.safe}>
+      <AppBackground variant="auth" />
 
-              <View style={styles.profileInfo}>
-                <Text style={styles.name}>{name}</Text>
-                <Text style={styles.phone}>{phone}</Text>
-                <Text style={styles.email}>{email}</Text>
-              </View>
+      <View style={styles.header}>
+        <Pressable onPress={onBack} style={styles.backButton}>
+          <ArrowLeftIcon size={24} color="#1c1c1e" />
+        </Pressable>
+        <Text style={styles.headerTitle}>Profile</Text>
+      </View>
 
-              <Pressable
-                onPress={onEditProfile || (() => Alert.alert('Edit profile', 'Profile editing is not wired yet.'))}
-                style={({ pressed }) => [styles.editButton, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Edit profile"
-              >
-                <Image source={EditIcon} style={styles.editImage} resizeMode="contain" />
-              </Pressable>
-            </View>
-          </View>
-
-          <View style={styles.menuCard}>
-            {menuItems.map((item) => (
-              <Pressable
-                key={item.key}
-                onPress={() => {
-                  if (onMenuPress) {
-                    onMenuPress(item.key);
-                    return;
-                  }
-
-                  if (item.key === 'language') {
-                    Alert.alert('Language', 'Language settings are not connected yet.');
-                    return;
-                  }
-
-                  Alert.alert(item.title, 'This section is not connected yet.');
-                }}
-                style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel={item.title}
-              >
-                <View style={[styles.menuIconWrap, { backgroundColor: item.iconBg }]}>
-                  <Image source={item.iconSource} style={styles.menuIconImage} resizeMode="contain" />
-                </View>
-
-                <View style={styles.menuTextWrap}>
-                  <Text style={styles.menuTitle}>{item.title}</Text>
-                  <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
-                </View>
-
-                <Text style={styles.chevron}>›</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          <Pressable
-            onPress={onLogout || (() => Alert.alert('Logout', 'Logout handler is not connected yet.'))}
-            style={({ pressed }) => [styles.logoutButton, pressed && styles.logoutPressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Logout"
-          >
-            <Text style={styles.logoutIcon}>⎋</Text>
-            <Text style={styles.logoutText}>Logout</Text>
-          </Pressable>
-
-          <Text style={styles.versionText}>Version 1.0.0</Text>
+      <View style={styles.profileCard}>
+        <Image source={avatarSource} style={styles.avatar} resizeMode="cover" />
+        <View style={styles.profileText}>
+          <Text style={styles.name}>{displayName}</Text>
+          <Text style={styles.meta}>{displayPhone}</Text>
+          <Text style={styles.meta}>{displayEmail}</Text>
         </View>
-      </PageFrame>
+        <Pressable onPress={onEditProfile} style={styles.editButton}>
+          <PencilIcon color="#363636" />
+        </Pressable>
+      </View>
+
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.menuCard}>
+          <MenuRow item={firstItem} onPress={() => onMenuPress?.(firstItem.key)} />
+        </View>
+
+        <View style={styles.menuCard}>
+          {menu.map((m, i) => (
+            <View key={m.key}>
+              <MenuRow item={m} onPress={() => onMenuPress?.(m.key)} />
+              {i < menu.length - 1 ? <View style={styles.menuDivider} /> : null}
+            </View>
+          ))}
+        </View>
+
+        <Pressable style={styles.logoutButton} onPress={onLogout}>
+          <LogoutIcon color="#ef4444" />
+          <Text style={styles.logoutText}>Logout</Text>
+        </Pressable>
+
+        <Text style={styles.version}>Version 1.0.0</Text>
+      </ScrollView>
 
       <BottomTabs active={activeTab} onTabPress={onTabPress} />
-    </View>
+    </SafeAreaView>
   );
 }
 
-function getAvatarSource(profilePhotoUrl?: string): ImageSourcePropType {
-  if (!profilePhotoUrl) {
-    return DefaultAvatar;
-  }
-
-  return { uri: profilePhotoUrl };
+function MenuRow({ item, onPress }: { item: ProfileMenuItem; onPress: () => void }) {
+  return (
+    <Pressable style={styles.menuRow} onPress={onPress}>
+      <View style={styles.menuIconWrap}>
+        <Image source={item.icon} style={styles.menuIcon} resizeMode="contain" />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.menuTitle}>{item.title}</Text>
+        {item.subtitle ? <Text style={styles.menuSubtitle}>{item.subtitle}</Text> : null}
+      </View>
+      <ChevronRightIcon color="#9ca3af" />
+    </Pressable>
+  );
 }
 
-function getInitials(name: string) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0] || '')
-    .join('')
-    .toUpperCase();
+function PencilIcon({ color }: { color: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 20 20" fill="none">
+      <Path
+        d="M14 2.5 17.5 6 7 16.5l-4 1 1-4L14 2.5Z"
+        stroke={color}
+        strokeWidth={1.6}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
 }
 
-function formatPhone(value: string) {
-  const digits = value.replace(/[^\d+]/g, '').trim();
-  if (digits.startsWith('+')) return digits;
-  if (digits.length === 10) return `+91 ${digits}`;
-  return value;
+function ChevronRightIcon({ color }: { color: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 20 20" fill="none">
+      <Path d="m8 5 5 5-5 5" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function LogoutIcon({ color }: { color: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 20 20" fill="none">
+      <Path
+        d="M8 3H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h3M13 6l4 4-4 4M7 10h10"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  safe: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#ffd1b0',
   },
-  content: {
-    paddingBottom: 18,
+  header: {
+    height: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.26)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.6)',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
+  },
+  headerTitle: {
+    marginLeft: 8,
+    color: '#1c1c1e',
+    fontSize: 20,
+    fontWeight: '600',
+    lineHeight: 28,
   },
   profileCard: {
-    borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.68)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.78)',
-    paddingHorizontal: 16,
-    paddingVertical: 18,
-    shadowColor: '#d8b9a8',
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 2,
-  },
-  profileRow: {
+    marginHorizontal: 0,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    paddingTop: 24,
+    paddingBottom: 24,
+    paddingHorizontal: 24,
   },
-  avatarWrap: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.9)',
+  avatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#363636',
   },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  initialsFallback: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-  },
-  initialsText: {
-    color: COLORS.textPrimary,
-    fontWeight: '900',
-    fontSize: 18,
-  },
-  profileInfo: {
+  profileText: {
     flex: 1,
-    paddingHorizontal: 14,
+    gap: 4,
   },
   name: {
-    color: COLORS.textPrimary,
-    fontSize: 17,
-    fontWeight: '900',
-    marginBottom: 6,
+    color: '#363636',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 26,
   },
-  phone: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    marginBottom: 4,
-  },
-  email: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
+  meta: {
+    color: '#363636',
+    fontSize: 14,
+    lineHeight: 20,
   },
   editButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.84)',
+    borderRadius: 20,
   },
-  editImage: {
-    width: 18,
-    height: 18,
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
+    gap: 12,
   },
   menuCard: {
-    marginTop: 14,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.66)',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.78)',
-    overflow: 'hidden',
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderRadius: 24,
+    paddingVertical: 8,
   },
-  menuItem: {
+  menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    gap: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
   },
   menuIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
   },
-  menuIconImage: {
-    width: 18,
-    height: 18,
-  },
-  menuTextWrap: {
-    flex: 1,
-    paddingRight: 12,
+  menuIcon: {
+    width: 22,
+    height: 22,
   },
   menuTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 2,
+    color: '#101828',
+    fontSize: 16,
+    fontWeight: '500',
+    lineHeight: 24,
   },
   menuSubtitle: {
-    color: COLORS.textMuted,
-    fontSize: 12,
+    color: '#6a7282',
+    fontSize: 14,
+    lineHeight: 20,
   },
-  chevron: {
-    color: '#9aa1b1',
-    fontSize: 28,
-    marginTop: -2,
+  menuDivider: {
+    marginLeft: 72,
+    height: 1,
+    backgroundColor: '#f3f4f6',
   },
   logoutButton: {
-    marginTop: 14,
-    borderWidth: 1,
-    borderColor: '#ff5252',
-    borderRadius: 22,
-    minHeight: 48,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.52)',
-  },
-  logoutPressed: {
-    opacity: 0.82,
-  },
-  logoutIcon: {
-    color: '#ff5252',
-    fontSize: 16,
-    marginRight: 8,
-    fontWeight: '900',
+    gap: 8,
+    height: 51,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    marginTop: 4,
   },
   logoutText: {
-    color: '#ff5252',
-    fontSize: 15,
-    fontWeight: '800',
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 24,
   },
-  versionText: {
+  version: {
     textAlign: 'center',
-    color: COLORS.textMuted,
-    fontSize: 11,
-    marginTop: 10,
-  },
-  pressed: {
-    opacity: 0.82,
+    color: '#6a7282',
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 8,
   },
 });

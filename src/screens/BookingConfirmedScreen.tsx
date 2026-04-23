@@ -1,21 +1,20 @@
-import React from 'react';
-import { StyleSheet, Text, View, Pressable } from 'react-native';
-import { PageFrame } from '../components/PageFrame';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { COLORS } from '../constants/theme';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppBackground } from '../components/AppBackground';
+import { ShareIcon } from '../components/HomeIcons';
+import {
+  CalendarIcon,
+  ClockIcon,
+  LocationIcon,
+  SmallScooterIcon,
+} from '../components/RideIcons';
 
 export function BookingConfirmedScreen({
-  onBack,
   onViewDetails,
   onBackHome,
   onStartRide,
   bookingId,
-  planType,
-  amount,
   pickupStationName,
-  dropStationName,
   timeSlot,
-  duration,
   rideStartsIn,
 }: {
   onBack: () => void;
@@ -32,194 +31,253 @@ export function BookingConfirmedScreen({
   rideStartsIn?: string;
 }) {
   return (
-    <View style={styles.root}>
-      <PageFrame title="" onBack={onBack} scroll={false}>
-        <View style={styles.content}>
-          <View style={styles.successIcon}>
-            <Text style={styles.checkMark}>✓</Text>
-          </View>
+    <SafeAreaView style={styles.safe}>
+      <AppBackground variant="auth" />
 
-          <Text style={styles.title}>Booking Confirmed!</Text>
-          <Text style={styles.subtitle}>Your scooty ride has been successfully booked</Text>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.successCircle}>
+          <Text style={styles.successCheck}>✓</Text>
+        </View>
 
-          <View style={styles.bookingCard}>
-            <View style={styles.bookingRow}>
-              <Text style={styles.bookingLabel}>Booking ID</Text>
-              <Text style={styles.bookingValue}>{bookingId || 'SCT12322'}</Text>
-            </View>
+        <Text style={styles.title}>Booking Confirmed!</Text>
+        <Text style={styles.subtitle}>Your scooty ride has been successfully booked</Text>
 
-            <View style={[styles.bookingRow, styles.borderTop]}>
-              <Text style={styles.bookingLabel}>Plan Type</Text>
-              <Text style={styles.bookingValue}>{planType || 'Full Day'}</Text>
-            </View>
+        <View style={styles.idCard}>
+          <Text style={styles.idText}>Booking ID : {bookingId || 'Unavailable'}</Text>
+        </View>
 
-            <View style={[styles.bookingRow, styles.borderTop]}>
-              <Text style={styles.bookingLabel}>Ride starts in</Text>
-              <Text style={styles.bookingValue}>{rideStartsIn || '15 mins'}</Text>
-              <Text style={styles.bookingSubtext}>Please arrive 15 mins early</Text>
-            </View>
+        <View style={styles.timerCard}>
+          <ClockIcon size={32} color="#363636" />
+          <Text style={styles.timerLabel}>Ride starts in</Text>
+          <Text style={styles.timerValue}>{rideStartsIn || 'Time unavailable'}</Text>
+          <Text style={styles.timerHint}>Please arrive 5 minutes early</Text>
+        </View>
 
-            <View style={[styles.bookingRow, styles.borderTop]}>
-              <Text style={styles.bookingLabel}>Amount</Text>
-              <Text style={styles.bookingValue}>₹{amount ?? 0}</Text>
-            </View>
-          </View>
-
-          <View style={styles.pickupBox}>
-            <Text style={styles.pickupTitle}>Drop Instructions</Text>
-            <View style={styles.pickupItem}>
-              <Text style={styles.pickupLabel}>📍 Drop Station</Text>
-              <Text style={styles.pickupValue}>{dropStationName || pickupStationName || 'Central Plaza'}</Text>
-            </View>
-            <View style={styles.pickupItem}>
-              <Text style={styles.pickupLabel}>📅 Time Slot</Text>
-              <Text style={styles.pickupValue}>{timeSlot || '6:00 PM - 7:00 PM'}</Text>
-            </View>
-            <View style={styles.pickupItem}>
-              <Text style={styles.pickupLabel}>⏱ Ride Duration</Text>
-              <Text style={styles.pickupValue}>{duration || '1 Hour'}</Text>
+        <View style={styles.pickupCard}>
+          <Text style={styles.pickupTitle}>Pickup Instructions</Text>
+          <View style={styles.pickupRow}>
+            <LocationIcon size={22} color="#363636" />
+            <View style={styles.pickupText}>
+              <Text style={styles.pickupLabel}>Pickup Station</Text>
+              <Text style={styles.pickupValue}>{pickupStationName || 'Station unavailable'}</Text>
             </View>
           </View>
-
-          <View style={styles.buttonGroup}>
-            {onStartRide ? (
-              <PrimaryButton label="Start Ride" onPress={onStartRide} style={styles.startRideButton} />
-            ) : null}
-            <PrimaryButton label="View Details" onPress={onViewDetails} />
+          <View style={styles.pickupRow}>
+            <CalendarIcon size={22} color="#363636" />
+            <View style={styles.pickupText}>
+              <Text style={styles.pickupLabel}>Time Slot</Text>
+              <Text style={styles.pickupValue}>{timeSlot || '—'}</Text>
+            </View>
           </View>
+        </View>
 
+        <Pressable style={styles.directionsButton} onPress={onStartRide}>
+          <SmallScooterIcon size={20} color="#fc5109" />
+          <Text style={styles.directionsText}>Get Directions</Text>
+        </Pressable>
+
+        <View style={styles.secondaryRow}>
           <Pressable style={styles.secondaryButton} onPress={onViewDetails}>
+            <ShareIcon size={16} color="#4b5563" />
             <Text style={styles.secondaryText}>Share</Text>
           </Pressable>
-
-          <Pressable onPress={onBackHome}>
-            <Text style={styles.backLink}>Back to Home</Text>
+          <Pressable style={styles.secondaryButton} onPress={onViewDetails}>
+            <Text style={styles.secondaryText}>My Bookings</Text>
           </Pressable>
         </View>
-      </PageFrame>
-    </View>
+
+        <Pressable style={styles.backHomeRow} onPress={onBackHome}>
+          <Text style={styles.backHomeText}>Back to Home</Text>
+        </Pressable>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  content: {
-    alignItems: 'center',
-    paddingVertical: 20,
+  safe: {
+    flex: 1,
+    backgroundColor: '#ffd1b0',
   },
-  successIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#34d399',
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 56,
+    paddingBottom: 32,
+    alignItems: 'center',
+  },
+  successCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#69df48',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 25,
+    shadowOffset: { width: 0, height: 20 },
+    elevation: 8,
   },
-  checkMark: {
-    fontSize: 40,
-    color: '#fff',
+  successCheck: {
+    color: '#ffffff',
+    fontSize: 42,
     fontWeight: '900',
+    lineHeight: 48,
   },
   title: {
-    color: COLORS.textPrimary,
-    fontSize: 20,
-    fontWeight: '900',
-    marginBottom: 8,
+    marginTop: 24,
+    color: '#363636',
+    fontSize: 30,
+    fontWeight: '700',
+    lineHeight: 36,
     textAlign: 'center',
   },
   subtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    marginBottom: 20,
+    marginTop: 8,
+    color: '#363636',
+    fontSize: 16,
+    lineHeight: 24,
     textAlign: 'center',
   },
-  bookingCard: {
+  idCard: {
+    marginTop: 24,
     width: '100%',
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.76)',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    padding: 14,
-    marginBottom: 16,
-  },
-  bookingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderRadius: 24,
+    paddingVertical: 24,
+    paddingHorizontal: 24,
     alignItems: 'center',
-    paddingVertical: 10,
   },
-  borderTop: {
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(33, 48, 74, 0.08)',
+  idText: {
+    color: '#363636',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
   },
-  bookingLabel: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  bookingValue: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  bookingSubtext: {
-    position: 'absolute',
-    bottom: -18,
-    right: 0,
-    color: COLORS.textMuted,
-    fontSize: 10,
-    fontWeight: '500',
-  },
-  pickupBox: {
+  timerCard: {
+    marginTop: 16,
     width: '100%',
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.76)',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    padding: 14,
-    marginBottom: 20,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderRadius: 24,
+    paddingVertical: 24,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    gap: 8,
+  },
+  timerLabel: {
+    color: '#363636',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  timerValue: {
+    color: '#363636',
+    fontSize: 30,
+    fontWeight: '700',
+    lineHeight: 36,
+  },
+  timerHint: {
+    color: '#363636',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  pickupCard: {
+    marginTop: 16,
+    width: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderRadius: 24,
+    paddingVertical: 24,
+    paddingHorizontal: 24,
+    gap: 20,
   },
   pickupTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '900',
-    marginBottom: 10,
+    color: '#363636',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 27,
   },
-  pickupItem: {
-    marginBottom: 12,
+  pickupRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  pickupText: {
+    flex: 1,
   },
   pickupLabel: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    marginBottom: 4,
+    color: '#4a5565',
+    fontSize: 12,
+    lineHeight: 16,
   },
   pickupValue: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontWeight: '700',
+    marginTop: 2,
+    color: '#363636',
+    fontSize: 16,
+    fontWeight: '500',
+    lineHeight: 24,
   },
-  buttonGroup: {
+  directionsButton: {
+    marginTop: 16,
     width: '100%',
+    height: 56,
+    borderRadius: 36,
+    borderWidth: 1.5,
+    borderColor: '#fc5109',
+    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
-  startRideButton: {
-    marginBottom: 10,
+  directionsText: {
+    color: '#fc5109',
+    fontSize: 16,
+    fontWeight: '500',
+    lineHeight: 28,
+  },
+  secondaryRow: {
+    marginTop: 16,
+    width: '100%',
+    flexDirection: 'row',
+    gap: 12,
   },
   secondaryButton: {
-    marginTop: 12,
-    paddingVertical: 10,
+    flex: 1,
+    height: 40,
+    borderRadius: 36,
+    borderWidth: 1.2,
+    borderColor: '#d1d5db',
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   secondaryText: {
-    color: COLORS.button,
-    fontSize: 13,
-    fontWeight: '700',
+    color: '#4b5563',
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 20,
   },
-  backLink: {
-    marginTop: 8,
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
-    textDecorationLine: 'underline',
+  backHomeRow: {
+    marginTop: 16,
+    paddingVertical: 8,
+  },
+  backHomeText: {
+    color: '#6b7280',
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 20,
   },
 });

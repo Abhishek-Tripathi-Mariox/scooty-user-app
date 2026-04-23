@@ -1,10 +1,24 @@
-import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { PageFrame } from '../components/PageFrame';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { COLORS } from '../constants/theme';
+import {
+  Image,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { AppBackground } from '../components/AppBackground';
+import { GradientButton } from '../components/GradientButton';
+import {
+  AddressPinIcon,
+  ArrowLeftIcon,
+  BatteryIcon,
+  CheckIcon,
+  SmallScooterIcon,
+  WalkerIcon,
+} from '../components/RideIcons';
 
-const StationImage = require('../assets/images/booking.png');
+const StationThumb = require('../assets/images/station-thumb.jpg');
 
 export type PickupStation = {
   id: string;
@@ -16,53 +30,12 @@ export type PickupStation = {
   parking: string;
 };
 
-const defaultStations: PickupStation[] = [
-  {
-    id: '1',
-    name: 'Central Plaza Station',
-    address: 'MC Road, Sector 14',
-    distance: '0.2 km',
-    available: 8,
-    battery: '92%',
-    parking: 'Covered Parking',
-  },
-  {
-    id: '2',
-    name: 'Uptown Junction',
-    address: 'Ring Road, Block B',
-    distance: '0.5 km',
-    available: 6,
-    battery: '88%',
-    parking: 'Street Parking',
-  },
-  {
-    id: '3',
-    name: 'City Center Hub',
-    address: 'Main Market Road',
-    distance: '0.8 km',
-    available: 4,
-    battery: '95%',
-    parking: 'Covered Parking',
-  },
-  {
-    id: '4',
-    name: 'Lake View Station',
-    address: 'Park Lane, South Block',
-    distance: '1.2 km',
-    available: 5,
-    battery: '91%',
-    parking: 'Covered Parking',
-  },
-];
-
 export function PickupStationScreen({
   onBack,
   onContinue,
   onSelectStation,
   stations,
   selectedStationId,
-  planTitle,
-  scheduleLabel,
   mode = 'pickup',
 }: {
   onBack: () => void;
@@ -74,412 +47,292 @@ export function PickupStationScreen({
   scheduleLabel?: string;
   mode?: 'pickup' | 'drop';
 }) {
-  const list = stations && stations.length > 0 ? stations : defaultStations;
-  const activeStation = list.find((station) => station.id === selectedStationId) || list[0];
-  const pageTitle = mode === 'drop' ? 'Select Drop Station' : 'Select Pickup Station';
-  const heroTitle = mode === 'drop' ? 'Choose a drop station for ride end.' : 'Choose a station close to you.';
-  const heroSubtitle =
-    mode === 'drop'
-      ? 'We’ll use this station when you finish the ride and return the scooty.'
-      : 'We’ll use the best pickup point for your ride window and keep your reservation flow moving.';
-  const bannerTitle =
-    mode === 'drop' ? 'Stations available for your drop-off' : 'Stations available for your time slot';
-  const bannerText =
-    mode === 'drop'
-      ? 'Tap a station card to lock in the return point before ending the ride.'
-      : 'Tap a station card to lock it in before confirming the ride.';
-  const footerTitle = mode === 'drop' ? 'Best drop nearby' : 'Best pickup nearby';
-  const footerText =
-    mode === 'drop'
-      ? 'The selected drop station will be carried into the ride-finish flow so we can close the trip cleanly.'
-      : 'The selected station will be carried into the final confirmation screen so we can keep the booking details together.';
+  const list = stations ?? [];
+  const activeId = selectedStationId || list[0]?.id || null;
+  const activeStation = list.find((station) => station.id === activeId) || list[0];
+  const title = mode === 'drop' ? 'Select Drop Station' : 'Select Pickup Station';
+  const pillText =
+    mode === 'drop' ? 'Stations available for drop-off' : 'Stations available for your time slot';
 
   return (
-    <View style={styles.root}>
-      <PageFrame
-        title={pageTitle}
-        subtitle={mode === 'drop' ? '04. Drop Scooty' : '03. Search'}
-        onBack={onBack}
-        scroll
+    <SafeAreaView style={styles.safe}>
+      <AppBackground variant="auth" />
+
+      <View style={styles.header}>
+        <Pressable onPress={onBack} style={styles.backButton}>
+          <ArrowLeftIcon size={24} color="#1c1c1e" />
+        </Pressable>
+        <Text style={styles.headerTitle}>{title}</Text>
+      </View>
+
+      <View style={styles.pillRow}>
+        <View style={styles.pill}>
+          <CheckIcon size={18} color="#fc4c02" />
+          <Text style={styles.pillText}>{pillText}</Text>
+        </View>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.content}>
-          <View style={styles.heroCard}>
-            <View style={styles.heroGlowOne} />
-            <View style={styles.heroGlowTwo} />
-
-            <View style={styles.heroTopRow}>
-              <View style={styles.stepPill}>
-                <Text style={styles.stepPillText}>{mode === 'drop' ? 'Station drop-off' : 'Station pick-up'}</Text>
-              </View>
-              <Text style={styles.heroStepText}>{`${list.length} stations nearby`}</Text>
-            </View>
-
-            <View style={styles.heroMainRow}>
-              <View style={styles.heroCopy}>
-                <Text style={styles.heroTitle}>{heroTitle}</Text>
-                <Text style={styles.heroSubtitle}>{heroSubtitle}</Text>
-              </View>
-
-              <View style={styles.heroVisual}>
-                <Image source={StationImage} style={styles.heroImage} resizeMode="contain" />
-              </View>
-            </View>
-
-            <View style={styles.heroStatsRow}>
-              <InfoPill label="Plan" value={planTitle || 'Selected'} />
-              <InfoPill label="Time" value={scheduleLabel || 'Flexible'} />
-              <InfoPill label="Support" value="24/7" />
-            </View>
+        {list.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>No live stations available</Text>
+            <Text style={styles.emptyBody}>The backend did not return any stations for this ride step.</Text>
           </View>
-
-          <View style={styles.banner}>
-            <Text style={styles.bannerIcon}>✓</Text>
-            <View style={styles.bannerCopy}>
-              <Text style={styles.bannerTitle}>{bannerTitle}</Text>
-              <Text style={styles.bannerText}>{bannerText}</Text>
-            </View>
-          </View>
-
-          {list.map((station) => {
-            const active = selectedStationId === station.id;
+        ) : (
+          list.map((station) => {
+            const active = station.id === activeId;
             return (
               <Pressable
                 key={station.id}
                 onPress={() => onSelectStation?.(station)}
-                style={({ pressed }) => [styles.card, active && styles.cardActive, pressed && styles.cardPressed]}
+                style={[styles.card, active && styles.cardActive]}
               >
                 <View style={styles.cardTop}>
-                  <View style={styles.thumbnailWrap}>
-                    <Image source={StationImage} style={styles.thumbnail} resizeMode="cover" />
-                    <View style={styles.thumbnailBadge}>
-                      <Text style={styles.thumbnailBadgeText}>{station.available} ready</Text>
+                  <Image source={StationThumb} style={styles.thumbnail} resizeMode="cover" />
+                  <View style={styles.cardText}>
+                    <Text style={styles.stationName}>{station.name}</Text>
+                    <View style={styles.addressRow}>
+                      <AddressPinIcon size={14} color="#4a5565" />
+                      <Text style={styles.addressText}>{station.address}</Text>
                     </View>
-                  </View>
-
-                  <View style={styles.cardHeader}>
-                    <View style={styles.cardTitleRow}>
-                      <Text style={styles.stationName}>{station.name}</Text>
-                      {active ? (
-                        <View style={styles.selectedBadge}>
-                          <Text style={styles.selectedBadgeText}>Selected</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <Text style={styles.stationAddress}>📍 {station.address}</Text>
                   </View>
                 </View>
 
-                <View style={styles.metaRow}>
-                  <Meta label={`Available ${station.available}`} />
-                  <Meta label={`Avg Battery ${station.battery}`} />
-                  <Meta label={`Distance ${station.distance}`} />
+                <View style={styles.divider} />
+
+                <View style={styles.statsRow}>
+                  <Stat
+                    icon={<SmallScooterIcon size={18} color="#16a34a" />}
+                    label="Available"
+                    value={String(station.available)}
+                  />
+                  <Stat
+                    icon={<BatteryIcon size={18} color="#16a34a" />}
+                    label="Avg Battery"
+                    value={station.battery}
+                  />
+                  <Stat
+                    icon={<WalkerIcon size={18} color="#4a5565" />}
+                    label="Distance"
+                    value={station.distance}
+                  />
                 </View>
 
-                <View style={styles.footerRow}>
-                  <Text style={styles.footerText}>24/7 Access</Text>
-                  <Text style={styles.footerText}>{station.parking}</Text>
+                <View style={styles.bottomRow}>
+                  <Text style={styles.bottomText}>24/7 Access</Text>
+                  <Text style={styles.bottomText}>{station.parking}</Text>
                 </View>
               </Pressable>
             );
-          })}
+          })
+        )}
+      </ScrollView>
 
-          <View style={styles.footerNote}>
-            <Text style={styles.footerNoteTitle}>{footerTitle}</Text>
-            <Text style={styles.footerNoteText}>{footerText}</Text>
-          </View>
-
-          <PrimaryButton
-            label="Continue to Summary"
-            onPress={() => onContinue(activeStation)}
-            style={styles.continueButton}
-          />
-        </View>
-      </PageFrame>
-    </View>
+      <View style={styles.footer}>
+        <GradientButton
+          label="Continue to Summary"
+          onPress={() => activeStation && onContinue(activeStation)}
+          height={56}
+        />
+      </View>
+    </SafeAreaView>
   );
 }
 
-function Meta({ label }: { label: string }) {
+function Stat({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+}) {
   return (
-    <View style={styles.metaItem}>
-      <Text style={styles.metaText}>{label}</Text>
-    </View>
-  );
-}
-
-function InfoPill({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.heroStatPill}>
-      <Text style={styles.heroStatValue}>{value}</Text>
-      <Text style={styles.heroStatLabel}>{label}</Text>
+    <View style={styles.statBlock}>
+      <View style={styles.statRow}>
+        {icon}
+        <Text style={styles.statLabel}>{label}</Text>
+      </View>
+      <Text style={styles.statValue}>{value}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
+  safe: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#ffd1b0',
   },
-  content: {
-    paddingBottom: 18,
-    gap: 12,
-  },
-  heroCard: {
-    borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.82)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
-    padding: 16,
-    overflow: 'hidden',
-  },
-  heroGlowOne: {
-    position: 'absolute',
-    right: -34,
-    top: -28,
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: 'rgba(255, 100, 28, 0.1)',
-  },
-  heroGlowTwo: {
-    position: 'absolute',
-    left: -26,
-    bottom: -28,
-    width: 108,
-    height: 108,
-    borderRadius: 54,
-    backgroundColor: 'rgba(255, 182, 112, 0.16)',
-  },
-  heroTopRow: {
+  header: {
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 10,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.26)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.6)',
   },
-  stepPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 100, 28, 0.1)',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  stepPillText: {
-    color: COLORS.button,
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  heroStepText: {
-    color: COLORS.textSecondary,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  heroMainRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  heroCopy: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  heroTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 24,
-    lineHeight: 29,
-    fontWeight: '900',
-    letterSpacing: -0.2,
-  },
-  heroSubtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: 8,
-  },
-  heroVisual: {
-    width: 108,
-    height: 108,
+  backButton: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  heroImage: {
-    width: 88,
-    height: 88,
-  },
-  heroStatsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 14,
-  },
-  heroStatPill: {
-    flex: 1,
-    minWidth: 0,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.88)',
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-  },
-  heroStatValue: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  heroStatLabel: {
-    color: COLORS.textSecondary,
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: 3,
-  },
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     borderRadius: 20,
-    backgroundColor: 'rgba(255, 100, 28, 0.08)',
+  },
+  headerTitle: {
+    marginLeft: 8,
+    color: '#1c1c1e',
+    fontSize: 20,
+    fontWeight: '600',
+    lineHeight: 32,
+  },
+  pillRow: {
+    alignItems: 'center',
+    paddingTop: 16,
+    paddingBottom: 12,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255, 122, 69, 0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 100, 28, 0.12)',
-    padding: 12,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderRadius: 24,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
-  bannerIcon: {
-    color: COLORS.button,
-    fontSize: 14,
-    fontWeight: '900',
-    marginRight: 8,
-    marginTop: 1,
+  pillText: {
+    color: '#363636',
+    fontSize: 13,
+    lineHeight: 20,
   },
-  bannerCopy: {
+  scroll: {
     flex: 1,
   },
-  bannerTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontWeight: '900',
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 120,
+    gap: 16,
   },
-  bannerText: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    lineHeight: 16,
-    marginTop: 4,
+  emptyState: {
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 1,
+    borderColor: '#ffffff',
+    padding: 18,
+    gap: 6,
+  },
+  emptyTitle: {
+    color: '#363636',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  emptyBody: {
+    color: '#4a5565',
+    fontSize: 13,
+    lineHeight: 18,
   },
   card: {
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.86)',
-    padding: 12,
-  },
-  cardPressed: {
-    opacity: 0.94,
+    borderColor: '#ffffff',
+    padding: 10,
+    gap: 10,
   },
   cardActive: {
-    borderColor: COLORS.button,
-    backgroundColor: 'rgba(255, 100, 28, 0.08)',
+    borderColor: '#fc4e05',
   },
   cardTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
-  },
-  thumbnailWrap: {
-    marginRight: 10,
+    gap: 12,
   },
   thumbnail: {
-    width: 68,
-    height: 68,
-    borderRadius: 16,
+    width: 71,
+    height: 70,
+    borderRadius: 11,
   },
-  thumbnailBadge: {
-    position: 'absolute',
-    left: 6,
-    bottom: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(33,48,74,0.76)',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-  },
-  thumbnailBadgeText: {
-    color: '#fff',
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  cardHeader: {
+  cardText: {
     flex: 1,
-  },
-  cardTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  stationName: {
-    flex: 1,
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  selectedBadge: {
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 100, 28, 0.12)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  selectedBadgeText: {
-    color: COLORS.button,
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  stationAddress: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    marginTop: 3,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 10,
-  },
-  metaItem: {
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.86)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  metaText: {
-    color: COLORS.textSecondary,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  footerText: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  footerNote: {
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.72)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.84)',
-    padding: 14,
     gap: 6,
   },
-  footerNoteTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontWeight: '900',
+  stationName: {
+    color: '#363636',
+    fontSize: 18,
+    fontWeight: '500',
+    lineHeight: 22,
   },
-  footerNoteText: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
+  addressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  addressText: {
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-start',
+    paddingTop: 2,
+  },
+  statBlock: {
+    flex: 1,
+    gap: 4,
+  },
+  statRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statLabel: {
+    color: '#6a7282',
+    fontSize: 12,
     lineHeight: 16,
   },
-  continueButton: {
-    marginTop: 4,
+  statValue: {
+    color: '#363636',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
+    marginLeft: 24,
+  },
+  bottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 4,
+  },
+  bottomText: {
+    color: '#363636',
+    fontSize: 15,
+    fontWeight: '500',
+    lineHeight: 22,
+  },
+  footer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    paddingTop: 17,
+    paddingBottom: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderTopWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
   },
 });

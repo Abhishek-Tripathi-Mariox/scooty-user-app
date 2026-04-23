@@ -1,8 +1,21 @@
-import React from 'react';
-import { StyleSheet, Text, View, Pressable, FlatList } from 'react-native';
-import { PageFrame } from '../components/PageFrame';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { COLORS } from '../constants/theme';
+import {
+  Image,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import Svg, { Path } from 'react-native-svg';
+import { AppBackground } from '../components/AppBackground';
+import {
+  ArrowLeftIcon,
+  SmallScooterIcon,
+  WalkerIcon,
+} from '../components/RideIcons';
+
+const StationThumb = require('../assets/images/station-thumb.jpg');
 
 export type ParkingStation = {
   id: string;
@@ -10,6 +23,7 @@ export type ParkingStation = {
   distance: number;
   address: string;
   availableSpots: number;
+  totalSpots?: number;
 };
 
 export function SelectParkingStationScreen({
@@ -21,146 +35,201 @@ export function SelectParkingStationScreen({
   onSelectStation: (station: ParkingStation) => void;
   stations?: ParkingStation[];
 }) {
-  const defaultStations: ParkingStation[] = [
-    {
-      id: '1',
-      name: 'Central Plaza',
-      distance: 0.2,
-      address: 'MG Road',
-      availableSpots: 5,
-    },
-    {
-      id: '2',
-      name: 'Tech Park',
-      distance: 0.7,
-      address: 'Whitefield',
-      availableSpots: 12,
-    },
-    {
-      id: '3',
-      name: 'Mall Road',
-      distance: 1.1,
-      address: 'Indiranagar',
-      availableSpots: 8,
-    },
-  ];
+  const list = stations ?? [];
 
   return (
-    <View style={styles.root}>
-      <PageFrame title="Select Parking Station" onBack={onBack}>
+    <SafeAreaView style={styles.safe}>
+      <AppBackground variant="auth" />
+
+      <View style={styles.header}>
+        <Pressable onPress={onBack} style={styles.backButton}>
+          <ArrowLeftIcon size={24} color="#1c1c1e" />
+        </Pressable>
+        <Text style={styles.headerTitle}>Select Parking Station</Text>
+      </View>
+
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.subtitle}>Choose a nearby station to park your scooter</Text>
 
-        <FlatList
-          data={stations || defaultStations}
-          keyExtractor={(item) => item.id}
-          scrollEnabled={false}
-          renderItem={({ item }) => (
+        {list.length === 0 ? (
+          <Text style={styles.emptyText}>No parking stations returned by the backend.</Text>
+        ) : (
+          list.map((station) => (
             <Pressable
-              style={styles.stationCard}
-              onPress={() => onSelectStation(item)}
+              key={station.id}
+              style={styles.card}
+              onPress={() => onSelectStation(station)}
             >
-              <View style={styles.stationContent}>
-                <View style={styles.stationHeader}>
-                  <Text style={styles.stationName}>{item.name}</Text>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      item.availableSpots > 0
-                        ? styles.statusAvailable
-                        : styles.statusFull,
-                    ]}
-                  >
-                    <Text style={styles.statusText}>
-                      {item.availableSpots > 0 ? 'Available' : 'Full'}
-                    </Text>
+              <View style={styles.cardTop}>
+                <Image source={StationThumb} style={styles.thumbnail} resizeMode="cover" />
+                <View style={styles.cardText}>
+                  <Text style={styles.stationName}>{station.name}</Text>
+                  <View style={styles.distanceRow}>
+                    <WalkerIcon size={18} color="#4a5565" />
+                    <Text style={styles.distanceText}>{station.distance.toFixed(1)} km away</Text>
                   </View>
                 </View>
-                <Text style={styles.stationAddress}>📍 {item.address}</Text>
-                <View style={styles.stationMeta}>
-                  <Text style={styles.distance}>📍 0.{item.distance} km away</Text>
-                  <Text style={styles.spots}>
-                    🅿️ {item.availableSpots} Spots available
-                  </Text>
+                <View style={styles.arrowWrap}>
+                  <ArrowIcon color="#22c55e" />
                 </View>
               </View>
-              <Text style={styles.arrow}>›</Text>
+
+              <View style={styles.cardBottom}>
+                <View style={styles.slotsRow}>
+                  <SmallScooterIcon size={18} color="#4a5565" />
+                  <Text style={styles.slotsText}>
+                    {station.availableSpots}/{station.totalSpots ?? 10} slots available
+                  </Text>
+                </View>
+                <View style={styles.availableChip}>
+                  <Text style={styles.availableText}>Available</Text>
+                </View>
+              </View>
             </Pressable>
-          )}
-        />
-      </PageFrame>
-    </View>
+          ))
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function ArrowIcon({ color }: { color: string }) {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 20 20" fill="none">
+      <Path
+        d="M10 16V4M10 4l-5 5M10 4l5 5"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  subtitle: {
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    marginBottom: 16,
-  },
-  stationCard: {
-    flexDirection: 'row',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.76)',
-    borderWidth: 1,
-    borderColor: COLORS.cardBorder,
-    padding: 12,
-    marginBottom: 10,
-    alignItems: 'center',
-  },
-  stationContent: {
+  safe: {
     flex: 1,
+    backgroundColor: '#ffd1b0',
   },
-  stationHeader: {
+  header: {
+    height: 60,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.26)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.6)',
   },
-  stationName: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '900',
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 20,
   },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  statusAvailable: {
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-  },
-  statusFull: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-  },
-  statusText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  stationAddress: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    marginBottom: 6,
-  },
-  stationMeta: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  distance: {
-    color: COLORS.textMuted,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  spots: {
-    color: COLORS.button,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  arrow: {
-    color: COLORS.textSecondary,
+  headerTitle: {
+    marginLeft: 8,
+    color: '#1c1c1e',
     fontSize: 20,
     fontWeight: '700',
+    lineHeight: 28,
+  },
+  scroll: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 24,
+    gap: 12,
+  },
+  emptyText: {
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    paddingVertical: 20,
+  },
+  subtitle: {
+    color: '#4a5565',
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 4,
+  },
+  card: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderRadius: 24,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  thumbnail: {
+    width: 48,
+    height: 48,
+    borderRadius: 11,
+  },
+  cardText: {
+    flex: 1,
+  },
+  stationName: {
+    color: '#363636',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 27,
+  },
+  distanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  distanceText: {
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  arrowWrap: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  slotsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  slotsText: {
+    color: '#364153',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  availableChip: {
+    backgroundColor: 'rgba(255, 255, 255, 0.56)',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  availableText: {
+    color: '#05df72',
+    fontSize: 12,
+    lineHeight: 16,
   },
 });

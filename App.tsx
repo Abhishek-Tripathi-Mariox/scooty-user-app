@@ -15,13 +15,19 @@ import { NotificationScreen } from './src/screens/NotificationScreen';
 import { RideHistoryScreen } from './src/screens/RideHistoryScreen';
 import { OffersRewardsScreen } from './src/screens/OffersRewardsScreen';
 import { HelpSupportScreen } from './src/screens/HelpSupportScreen';
+import { MyWalletScreen } from './src/screens/MyWalletScreen';
+import { DepositRefundStatusScreen } from './src/screens/DepositRefundStatusScreen';
 import { RideCompletedScreen } from './src/screens/RideCompletedScreen';
 import { RateYourExperienceScreen } from './src/screens/RateYourExperienceScreen';
 import { ScanQRCodeScreen } from './src/screens/ScanQRCodeScreen';
 import { RideInProgressScreen } from './src/screens/RideInProgressScreen';
 import { ParkingConfirmationScreen } from './src/screens/ParkingConfirmationScreen';
+import { SelectParkingStationScreen } from './src/screens/SelectParkingStationScreen';
 import { ConfirmRideScreen } from './src/screens/ConfirmRideScreen';
+import { PaymentModeScreen } from './src/screens/PaymentModeScreen';
 import { BookingConfirmedScreen } from './src/screens/BookingConfirmedScreen';
+import { PreRideScreen } from './src/screens/PreRideScreen';
+import { RideCancelScreen } from './src/screens/RideCancelScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
 import { AuthStep, OTP_LENGTH } from './src/constants/auth';
 import type { TabKey } from './src/components/BottomTabs';
@@ -32,6 +38,7 @@ import {
   NotificationItem,
   PlanItem,
   RideItem,
+  WalletTransactionItem,
   StationItem,
   TimeSlotItem,
   User,
@@ -49,9 +56,15 @@ type AppStep =
   | 'time-slot'
   | 'drop-station'
   | 'confirm-ride'
+  | 'payment-mode'
   | 'booking-confirmed'
+  | 'pre-ride'
+  | 'ride-cancel'
+  | 'wallet'
+  | 'refund-status'
   | 'scan-qr'
   | 'ride-progress'
+  | 'end-ride-station'
   | 'parking-confirmation'
   | 'bookings'
   | 'profile'
@@ -123,15 +136,15 @@ const mapBackendPlanToRidePlan = (plan: PlanItem): RidePlan => {
 
 const mapStationToPickupStation = (station: StationItem, fallbackId: string): PickupStation => ({
   id: station._id || fallbackId,
-  name: station.name || 'Central Plaza Station',
-  address: station.address || 'MC Road, Sector 14',
+  name: station.name || 'Station unavailable',
+  address: station.address || 'Address unavailable',
   distance:
     typeof station.distanceKm === 'number' && Number.isFinite(station.distanceKm)
       ? `${station.distanceKm.toFixed(1)} km`
-      : '0.2 km',
+      : '—',
   available: Number(station.availableScooties ?? 0),
-  battery: '92%',
-  parking: 'Covered Parking',
+  battery: '—',
+  parking: 'Parking unavailable',
 });
 
 const resolveRidePlanCode = (plan?: RidePlan | null) => plan?.code || mapRidePlanIdToPlanCode(plan?.id || null);
@@ -181,7 +194,6 @@ export default function App() {
   const [step, setStep] = useState<AppStep>('splash');
   const [mobileNumber, setMobileNumber] = useState('');
   const [otp, setOtp] = useState('');
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
@@ -193,6 +205,7 @@ export default function App() {
   const [rides, setRides] = useState<RideItem[] | null>(null);
   const [bookings, setBookings] = useState<BookingItem[] | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[] | null>(null);
+  const [transactions, setTransactions] = useState<WalletTransactionItem[] | null>(null);
   const [selectedRide, setSelectedRide] = useState<RideItem | null>(null);
   const [selectedRidePlan, setSelectedRidePlan] = useState<RidePlan | null>(null);
   const [selectedPickupStation, setSelectedPickupStation] = useState<PickupStation | null>(null);
@@ -373,6 +386,14 @@ export default function App() {
       const notificationsResult = await userApi.notifications(token);
       setNotifications(notificationsResult.notifications);
 
+      try {
+        const transactionsResult = await userApi.transactions(token, { limit: 20 });
+        setTransactions(transactionsResult.transactions || []);
+      } catch (error) {
+        console.warn('Failed to load wallet transactions:', error);
+        setTransactions([]);
+      }
+
       await loadBookings();
     } catch (error) {
       console.error('Failed to load user data:', error);
@@ -385,11 +406,6 @@ export default function App() {
   const handleSendOtp = async () => {
     if (!mobileNumber || mobileNumber.length !== 10) {
       Alert.alert('Error', 'Please enter a valid 10-digit mobile number');
-      return;
-    }
-
-    if (!acceptedTerms) {
-      Alert.alert('Error', 'Please accept Terms & Conditions');
       return;
     }
 
@@ -587,6 +603,7 @@ export default function App() {
           setRides(null);
           setBookings(null);
           setNotifications(null);
+          setTransactions(null);
           setSelectedRide(null);
           setSelectedRidePlan(null);
           setSelectedPickupStation(null);
@@ -650,16 +667,18 @@ export default function App() {
       });
       setCreatedBooking(bookingResult.booking);
 
-      const [profileResult, ridesResult, dashboardResult, notificationsResult] = await Promise.all([
+      const [profileResult, ridesResult, dashboardResult, notificationsResult, transactionsResult] = await Promise.all([
         userApi.profile(token),
         userApi.rides(token),
         userApi.dashboard(token),
         userApi.notifications(token),
+        userApi.transactions(token, { limit: 20 }),
       ]);
       setUser(profileResult.user);
       setDashboard(profileResult.dashboard || dashboardResult.dashboard);
       setRides(ridesResult.rides);
       setNotifications(notificationsResult.notifications);
+      setTransactions(transactionsResult.transactions || []);
       setSelectedRide({
         _id: bookingResult.booking._id,
         status: 'ongoing',
@@ -709,21 +728,21 @@ export default function App() {
   };
 
   const handlePauseResumeRide = () => {
-    Alert.alert('Ride Status', 'This demo ride action is ready for live ride integration.');
+    Alert.alert('Ride Status', 'Ride controls are ready for live ride integration.');
   };
 
   const handleEndRide = () => {
-    setStep('parking-confirmation');
+    setStep('end-ride-station');
   };
 
   const handleConfirmParking = () => {
     setSelectedRide((current) =>
       current
-        ? {
+          ? {
             ...current,
             status: 'completed',
-            distance: current.distance || 6.5,
-            fare: current.fare || current.pricing?.totalPayable || 153,
+            distance: current.distance || 0,
+            fare: current.fare || current.pricing?.totalPayable || 0,
           }
         : current,
     );
@@ -739,8 +758,6 @@ export default function App() {
     return (
       <LoginScreen
         mobileNumber={mobileNumber}
-        acceptedTerms={acceptedTerms}
-        onToggleTerms={() => setAcceptedTerms(!acceptedTerms)}
         onChangeMobile={setMobileNumber}
         onContinue={handleSendOtp}
         loading={loading}
@@ -778,6 +795,7 @@ export default function App() {
         user={user}
         dashboard={dashboard}
         stations={pickupStations}
+        loading={loading}
         activeTab={activeTab}
         onTabPress={handleTabPress}
         onBookScooty={startBookingFlow}
@@ -868,6 +886,37 @@ export default function App() {
         bookings={bookings}
         loading={loading || bookingsLoading}
         activeTab={activeTab}
+        onStartRide={() => setStep('pre-ride')}
+        onCancelBooking={() => setStep('ride-cancel')}
+      />
+    );
+  }
+
+  if (step === 'ride-cancel') {
+    return (
+      <RideCancelScreen
+        onBack={() => setStep('bookings')}
+        onConfirmCancel={() => setStep('bookings')}
+        activeTab={activeTab}
+        onTabPress={handleTabPress}
+      />
+    );
+  }
+
+  if (step === 'pre-ride') {
+    return (
+      <PreRideScreen
+        onBack={() => setStep('bookings')}
+        onStartRide={() => setStep('scan-qr')}
+        scootyId={
+          createdBooking?.scooter?.registrationNumber ||
+          (selectedPickupStation ? `SC${String(selectedPickupStation.id).padStart(3, '0')}` : 'Unavailable')
+        }
+        scootyBattery={0}
+        scootyRange={0}
+        farePerMinute={selectedRidePlan?.id === 'monthly' ? 2 : 3}
+        farePerKilometer={selectedRidePlan?.id === 'weekly' ? 6 : 8}
+        walletBalance={dashboard?.walletBalance ?? 0}
       />
     );
   }
@@ -904,6 +953,7 @@ export default function App() {
         onBack={() => setStep('dashboard')}
         onTabPress={handleTabPress}
         notifications={notifications}
+        loading={loading}
         activeTab={activeTab}
       />
     );
@@ -915,6 +965,7 @@ export default function App() {
         onBack={() => setStep('profile')}
         onTabPress={handleTabPress}
         rides={rides}
+        loading={loading}
         activeTab={activeTab}
         onOpenRide={(ride) => {
           setSelectedRide(ride);
@@ -944,6 +995,32 @@ export default function App() {
     );
   }
 
+  if (step === 'wallet') {
+    return (
+      <MyWalletScreen
+        onBack={() => setStep('dashboard')}
+        onTabPress={handleTabPress}
+        balance={dashboard?.walletBalance ?? 0}
+        transactions={transactions}
+        activeTab={activeTab}
+        onOpenRefundStatus={() => setStep('refund-status')}
+      />
+    );
+  }
+
+  if (step === 'refund-status') {
+    return (
+      <DepositRefundStatusScreen
+        onBack={() => setStep('wallet')}
+        onGoToWallet={() => setStep('wallet')}
+        onBackHome={() => {
+          setActiveTab('home');
+          setStep('dashboard');
+        }}
+      />
+    );
+  }
+
   if (step === 'ride-completed') {
     return (
       <RideCompletedScreen
@@ -953,7 +1030,7 @@ export default function App() {
           setStep('dashboard');
         }}
         onRate={() => setStep('rate')}
-        duration={selectedRide?.schedule?.startLabel || selectedRide?.startAt || '18:45'}
+        duration={selectedRide?.schedule?.startLabel || selectedRide?.startAt || '—'}
         distance={selectedRide?.distance || 0}
         fare={selectedRide?.pricing?.totalPayable ?? selectedRide?.fare}
         securityDeposit={selectedRide?.pricing?.securityDeposit ?? 0}
@@ -965,14 +1042,14 @@ export default function App() {
     return (
       <ConfirmRideScreen
         onBack={() => setStep('drop-station')}
-        onConfirm={handleConfirmBooking}
+        onConfirm={() => setStep('payment-mode')}
         scootyId={
           createdBooking?.scooter?.registrationNumber ||
           bookingQuote?.scooter?.registrationNumber ||
-          (selectedPickupStation ? `SC${String(selectedPickupStation.id).padStart(3, '0')}` : 'SC001')
+          (selectedPickupStation ? `SC${String(selectedPickupStation.id).padStart(3, '0')}` : 'Unavailable')
         }
-        scootyBattery={92}
-        scootyRange={45}
+        scootyBattery={0}
+        scootyRange={0}
         farePerMinute={selectedRidePlan?.id === 'monthly' ? 2 : 3}
         farePerKilometer={selectedRidePlan?.id === 'weekly' ? 6 : 8}
         destinations={[]}
@@ -982,6 +1059,22 @@ export default function App() {
         dropStationName={selectedDropStation?.name}
         scheduleLabel={formatScheduleLabel(selectedTimeSlot)}
         estimatedTotal={bookingQuote?.pricing?.totalPayable || createdBooking?.pricing?.totalPayable || selectedRidePlan?.price}
+      />
+    );
+  }
+
+  if (step === 'payment-mode') {
+    return (
+      <PaymentModeScreen
+        onBack={() => setStep('confirm-ride')}
+        onConfirm={handleConfirmBooking}
+        amount={
+          bookingQuote?.pricing?.totalPayable ||
+          createdBooking?.pricing?.totalPayable ||
+          selectedRidePlan?.price ||
+          0
+        }
+        loading={bookingBusy}
       />
     );
   }
@@ -996,8 +1089,8 @@ export default function App() {
           setActiveTab('home');
           setStep('dashboard');
         }}
-        bookingId={createdBooking?._id || 'SCT12322'}
-        planType={createdBooking?.planName || selectedRidePlan?.title || 'Full Day'}
+        bookingId={createdBooking?._id || 'Unavailable'}
+        planType={createdBooking?.planName || selectedRidePlan?.title || 'Plan unavailable'}
         amount={createdBooking?.pricing?.totalPayable || bookingQuote?.pricing?.totalPayable || selectedRidePlan?.price}
         pickupStationName={createdBooking?.pickupStation?.name || selectedPickupStation?.name}
         dropStationName={createdBooking?.dropStation?.name || selectedRide?.dropStation?.name}
@@ -1009,7 +1102,6 @@ export default function App() {
               : undefined
         }
         duration={selectedTimeSlot?.duration || selectedRidePlan?.duration}
-        rideStartsIn="15 mins"
       />
     );
   }
@@ -1019,6 +1111,7 @@ export default function App() {
       <ScanQRCodeScreen
         onBack={() => setStep('booking-confirmed')}
         onScanned={handleScannedCode}
+        expectedCode={createdBooking?.unlockCode || selectedRide?.unlockCode || ''}
       />
     );
   }
@@ -1029,10 +1122,19 @@ export default function App() {
         onEmergency={handleRideEmergency}
         onPauseResume={handlePauseResumeRide}
         onEndRide={handleEndRide}
-        rideTime={selectedRide?.schedule?.startLabel || '0:05'}
+        rideTime={selectedRide?.schedule?.startLabel || '—'}
         distance={selectedRide?.distance || 0}
-        battery={92}
-        speed={18}
+        battery={0}
+        speed={0}
+      />
+    );
+  }
+
+  if (step === 'end-ride-station') {
+    return (
+      <SelectParkingStationScreen
+        onBack={() => setStep('ride-progress')}
+        onSelectStation={() => setStep('parking-confirmation')}
       />
     );
   }
@@ -1040,8 +1142,8 @@ export default function App() {
   if (step === 'parking-confirmation') {
     return (
       <ParkingConfirmationScreen
-        onBack={() => setStep('ride-progress')}
-        onRetakePhoto={() => setStep('ride-progress')}
+        onBack={() => setStep('end-ride-station')}
+        onRetakePhoto={() => undefined}
         onConfirmParking={handleConfirmParking}
         photoTaken={false}
       />

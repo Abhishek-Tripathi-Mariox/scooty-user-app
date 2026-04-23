@@ -1,230 +1,235 @@
-import React from 'react';
-import { FlatList, Image, ImageSourcePropType, Pressable, StyleSheet, Text, View } from 'react-native';
-import { PageFrame } from '../components/PageFrame';
+import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
+import { AppBackground } from '../components/AppBackground';
 import { BottomTabs, type TabKey } from '../components/BottomTabs';
-import { COLORS } from '../constants/theme';
+import { ArrowLeftIcon, CheckIcon } from '../components/RideIcons';
 import type { NotificationItem } from '../services/userApi';
 
-type NotificationViewItem = NotificationItem & {
-  timeLabel: string;
-  iconBg: string;
-  iconSource: ImageSourcePropType;
+type NotifRow = {
+  id: string;
+  title: string;
+  message: string;
+  time: string;
+  kind: 'reminder' | 'message' | 'confirm' | 'offer';
 };
-
-const NotificationHero = require('../assets/images/notification.png');
-const RideIcon = require('../assets/images/orderedconfirmed.png');
-const PushIcon = require('../assets/images/pushnotification.png');
-const ReminderIcon = require('../assets/images/remindernotification.png');
-const MessageIcon = require('../assets/images/remindermessage.png');
-const OfferIcon = require('../assets/images/summeroffer.png');
 
 export function NotificationScreen({
   onBack,
   onTabPress,
   notifications,
+  loading = false,
   activeTab,
 }: {
   onBack: () => void;
   onTabPress: (tab: TabKey) => void;
   notifications?: NotificationItem[] | null;
+  loading?: boolean;
   activeTab: TabKey;
 }) {
-  const items = (notifications || []).map((item, index) => ({
-    ...item,
-    timeLabel: deriveTimeLabel(item.createdAt, index),
-    iconBg: colorForNotification(item.type),
-    iconSource: iconForNotification(item.type),
-  }));
+  const items: NotifRow[] =
+    notifications && notifications.length > 0
+      ? notifications.map((n) => ({
+          id: n._id,
+          title: n.title,
+          message: n.message,
+          time: n.createdAt ? timeAgo(n.createdAt) : '—',
+          kind: mapKind(n.type),
+        }))
+      : [];
 
   return (
-    <View style={styles.root}>
-      <PageFrame title="Notification" onBack={onBack} scroll>
-        <View style={styles.content}>
-          <View style={styles.heroCard}>
-            <Image source={NotificationHero} style={styles.heroImage} resizeMode="contain" />
-            <View style={styles.heroTextWrap}>
-              <Text style={styles.heroTitle}>Updates from your rides</Text>
-              <Text style={styles.heroText}>
-                Alerts, reminders, offers, and ride confirmations appear here.
-              </Text>
-            </View>
-          </View>
+    <SafeAreaView style={styles.safe}>
+      <AppBackground variant="auth" />
 
-          <Text style={styles.dayLabel}>Today</Text>
+      <View style={styles.header}>
+        <Pressable onPress={onBack} style={styles.backButton}>
+          <ArrowLeftIcon size={24} color="#1c1c1e" />
+        </Pressable>
+        <Text style={styles.headerTitle}>Notification</Text>
+      </View>
+
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.sectionTitle}>Today</Text>
+        {loading ? (
+          <Text style={styles.emptyText}>Loading notifications...</Text>
+        ) : items.length === 0 ? (
+          <Text style={styles.emptyText}>No live notifications yet.</Text>
+        ) : (
           <View style={styles.list}>
-            {items.length > 0 ? (
-              <FlatList
-                data={items}
-                keyExtractor={(item) => item._id}
-                scrollEnabled={false}
-                renderItem={({ item }) => <NotificationCard notification={item} />}
-              />
-            ) : (
-              <Text style={styles.emptyText}>No notifications yet</Text>
-            )}
+            {items.map((n) => (
+              <View key={n.id} style={styles.row}>
+                <View style={[styles.iconWrap, iconBg(n.kind)]}>
+                  <NotifIcon kind={n.kind} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.titleRow}>
+                    <Text style={styles.title}>{n.title}</Text>
+                    <Text style={styles.time}>{n.time}</Text>
+                  </View>
+                  <Text style={styles.message}>{n.message}</Text>
+                </View>
+              </View>
+            ))}
           </View>
-        </View>
-      </PageFrame>
+        )}
+      </ScrollView>
 
       <BottomTabs active={activeTab} onTabPress={onTabPress} />
-    </View>
+    </SafeAreaView>
   );
 }
 
-function NotificationCard({ notification }: { notification: NotificationViewItem }) {
+function NotifIcon({ kind }: { kind: NotifRow['kind'] }) {
+  if (kind === 'reminder') return <BellIcon color="#1e40af" />;
+  if (kind === 'message') return <MessageIcon color="#9ca3af" />;
+  if (kind === 'confirm') return <CheckIcon size={24} color="#16a34a" />;
+  return <PartyIcon />;
+}
+
+function BellIcon({ color }: { color: string }) {
   return (
-    <Pressable style={[styles.card, !notification.isRead && styles.cardUnread]}>
-      <View style={[styles.iconWrap, { backgroundColor: notification.iconBg }]}>
-        <Image source={notification.iconSource} style={styles.iconImage} resizeMode="contain" />
-      </View>
-
-      <View style={styles.cardBody}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.title}>{notification.title}</Text>
-          <Text style={styles.time}>{notification.timeLabel}</Text>
-        </View>
-        <Text style={styles.message}>{notification.message}</Text>
-      </View>
-    </Pressable>
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill={color}>
+      <Path d="M12 22a2 2 0 0 0 2-2h-4a2 2 0 0 0 2 2Zm6-6V11a6 6 0 0 0-5-5.9V4a1 1 0 1 0-2 0v1.1A6 6 0 0 0 6 11v5l-2 2v1h16v-1l-2-2Z" />
+    </Svg>
   );
 }
 
-function deriveTimeLabel(value?: string, index?: number) {
-  if (!value) return index === 0 ? '13min' : '1h';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return index === 0 ? '13min' : '1h';
-  const diff = Math.max(1, Math.round((Date.now() - date.getTime()) / 60000));
-  if (diff < 60) return `${diff}min`;
-  return `${Math.round(diff / 60)}h`;
+function MessageIcon({ color }: { color: string }) {
+  return (
+    <Svg width={22} height={22} viewBox="0 0 22 22" fill="none">
+      <Circle cx={11} cy={11} r={10} fill={color} />
+      <Path
+        d="M6 9a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2H9l-3 2v-8Z"
+        fill="#ffffff"
+      />
+    </Svg>
+  );
 }
 
-function iconForNotification(type?: string): ImageSourcePropType {
-  switch (String(type || '').toLowerCase()) {
-    case 'ride':
-      return RideIcon;
-    case 'earning':
-      return PushIcon;
-    case 'system':
-      return ReminderIcon;
-    case 'offer':
-      return OfferIcon;
-    default:
-      return MessageIcon;
-  }
+function PartyIcon() {
+  return (
+    <Svg width={26} height={26} viewBox="0 0 26 26" fill="none">
+      <Path d="m3 22 7-13 8 4-15 9Z" fill="#f97316" />
+      <Path d="M14 4c-1 2 0 4 2 4" stroke="#fb923c" strokeWidth={1.8} strokeLinecap="round" />
+      <Circle cx={21} cy={7} r={1.2} fill="#fde047" />
+      <Circle cx={18} cy={3} r={1} fill="#34d399" />
+      <Circle cx={23} cy={13} r={1} fill="#ef4444" />
+    </Svg>
+  );
 }
 
-function colorForNotification(type?: string) {
-  switch (String(type || '').toLowerCase()) {
-    case 'ride':
-      return '#dbeafe';
-    case 'earning':
-      return '#dcfce7';
-    case 'system':
-      return '#fef3c7';
-    case 'offer':
-      return '#fce7f3';
-    default:
-      return '#dbeafe';
-  }
+function iconBg(kind: NotifRow['kind']) {
+  if (kind === 'reminder') return { backgroundColor: '#dbeafe' };
+  if (kind === 'message') return { backgroundColor: 'transparent' };
+  if (kind === 'confirm') return { backgroundColor: '#e1f4e5' };
+  return { backgroundColor: '#ffe2e2' };
+}
+
+function mapKind(type?: string): NotifRow['kind'] {
+  const t = (type || '').toLowerCase();
+  if (t.includes('reminder')) return 'reminder';
+  if (t.includes('message') || t.includes('chat')) return 'message';
+  if (t.includes('confirm') || t.includes('success') || t.includes('order')) return 'confirm';
+  return 'offer';
+}
+
+function timeAgo(iso: string) {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `${mins}min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hr`;
+  return `${Math.floor(hrs / 24)}d`;
 }
 
 const styles = StyleSheet.create({
-  root: {
+  safe: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: '#ffd1b0',
   },
-  content: {
-    paddingBottom: 18,
-  },
-  heroCard: {
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.76)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.84)',
-    padding: 14,
-    marginBottom: 12,
+  header: {
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  heroImage: {
-    width: 72,
-    height: 72,
-    marginRight: 12,
-  },
-  heroTextWrap: {
-    flex: 1,
-  },
-  heroTitle: {
-    color: COLORS.textPrimary,
-    fontSize: 15,
-    fontWeight: '900',
-    marginBottom: 4,
-  },
-  heroText: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    lineHeight: 16,
-  },
-  dayLabel: {
-    color: COLORS.textPrimary,
-    fontSize: 14,
-    fontWeight: '900',
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  list: {
-    gap: 10,
-  },
-  emptyText: {
-    color: COLORS.textMuted,
-    fontSize: 12,
-    textAlign: 'center',
-    paddingVertical: 20,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    paddingHorizontal: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.26)',
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(33, 48, 74, 0.06)',
-    paddingVertical: 12,
+    borderBottomColor: 'rgba(255, 255, 255, 0.6)',
   },
-  cardUnread: {},
-  iconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
+  backButton: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    borderRadius: 20,
   },
-  iconImage: {
-    width: 22,
-    height: 22,
+  headerTitle: {
+    marginLeft: 8,
+    color: '#1c1c1e',
+    fontSize: 20,
+    fontWeight: '600',
+    lineHeight: 28,
   },
-  cardBody: {
+  scroll: {
     flex: 1,
   },
-  cardHeader: {
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 24,
+  },
+  sectionTitle: {
+    color: '#1b1d21',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  list: {
+    gap: 20,
+  },
+  emptyText: {
+    color: '#4a5565',
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 16,
     alignItems: 'flex-start',
-    marginBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(143, 146, 161, 0.1)',
+    paddingBottom: 20,
+  },
+  iconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   title: {
     flex: 1,
-    color: COLORS.textPrimary,
-    fontSize: 12,
-    fontWeight: '900',
-    paddingRight: 12,
+    color: '#171717',
+    fontSize: 14,
+    fontWeight: '700',
+    lineHeight: 20,
   },
   time: {
-    color: '#c7cad4',
-    fontSize: 10,
-    fontWeight: '600',
+    color: '#d9d9d9',
+    fontSize: 12,
+    lineHeight: 16,
   },
   message: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    lineHeight: 16,
+    marginTop: 2,
+    color: '#8f92a1',
+    fontSize: 14,
+    lineHeight: 20,
   },
 });
