@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Image, SafeAreaView, StyleSheet, Switch, Text, View } from 'react-native';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
+import { fetchCoordsIfAllowed, type Coords } from '../utils/location';
 
 const LocationIcon = require('../assets/images/location.png');
 const CameraIcon = require('../assets/images/camera.png');
@@ -43,7 +44,7 @@ export function PermissionsScreen({
   onContinue,
   initialPermissions,
 }: {
-  onContinue: (permissions: Record<PermissionKey, boolean>) => void;
+  onContinue: (permissions: Record<PermissionKey, boolean>, coords: Coords | null) => void;
   initialPermissions?: Partial<Record<PermissionKey, boolean>>;
 }) {
   const [enabled, setEnabled] = useState<Record<PermissionKey, boolean>>({
@@ -51,6 +52,15 @@ export function PermissionsScreen({
     camera: initialPermissions?.camera ?? true,
     notifications: initialPermissions?.notifications ?? true,
   });
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleContinue = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    const coords = enabled.location ? await fetchCoordsIfAllowed() : null;
+    setSubmitting(false);
+    onContinue(enabled, coords);
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -98,9 +108,10 @@ export function PermissionsScreen({
 
         <View style={styles.footer}>
           <GradientButton
-            label="Continue to Home"
-            onPress={() => onContinue(enabled)}
+            label={submitting ? 'Getting location…' : 'Continue to Home'}
+            onPress={handleContinue}
             height={52}
+            disabled={submitting}
           />
         </View>
       </View>

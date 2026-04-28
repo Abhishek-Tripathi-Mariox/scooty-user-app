@@ -65,11 +65,21 @@ export function useResponsiveLayout(): ResponsiveLayout {
     tabLabelSize: clamp(round(width * 0.028), 10, 12),
     pageTitleSize: clamp(round(width * 0.055), 20, 24),
     pageSubtitleSize: clamp(round(width * 0.033), 12, 14),
-    mapCardHeight: clamp(round(width * 0.63), 220, 300),
-    heroCardWidth: clamp(round(width * 0.56), 200, 250),
-    heroArtworkHeight: clamp(round(width * 0.35), 110, 150),
+    mapCardHeight: clamp(round(width * 0.65), 230, 290),
+    heroCardWidth: clamp(round(width * 0.74), 260, 320),
+    heroArtworkHeight: clamp(round(width * 0.42), 140, 180),
     referralVisualSize: clamp(round(width * 0.23), 76, 108),
     qrFrameSize: clamp(round(width * 0.72), 240, 320),
     qrInnerSize: clamp(round(width * 0.5), 170, 220),
   };
+}
+
+export function scaleSize(size: number, screenWidth: number): number {
+  const ratio = screenWidth / DESIGN_SURFACE_WIDTH;
+  return round(size * clamp(ratio, 0.85, 1.15));
+}
+
+export function scaleFont(size: number, screenWidth: number): number {
+  const ratio = screenWidth / DESIGN_SURFACE_WIDTH;
+  return round(size * clamp(ratio, 0.9, 1.1));
 }

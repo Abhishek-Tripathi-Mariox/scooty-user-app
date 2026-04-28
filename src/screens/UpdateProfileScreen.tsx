@@ -12,6 +12,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import DocumentPicker, { type DocumentPickerResponse } from 'react-native-document-picker';
+import { GradientFill } from '../components/GradientFill';
 import { PageFrame } from '../components/PageFrame';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { COLORS, SPACING } from '../constants/theme';
@@ -105,7 +106,7 @@ export function UpdateProfileScreen({
 
   return (
     <View style={styles.root}>
-      <PageFrame title="Update Profile" subtitle="Edit the details shown on your account" onBack={onBack}>
+      <PageFrame title="Profile" onBack={onBack}>
         <View style={styles.content}>
           <View style={styles.heroCard}>
             <View style={styles.avatarWrap}>
@@ -116,6 +117,7 @@ export function UpdateProfileScreen({
                 </View>
               ) : null}
               <Pressable style={styles.cameraBadge} onPress={handlePickPhoto} disabled={photoPicking}>
+                <GradientFill radius={17} />
                 <Image source={CameraIcon} style={styles.cameraIcon} resizeMode="contain" />
               </Pressable>
             </View>
@@ -326,7 +328,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: COLORS.button,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,

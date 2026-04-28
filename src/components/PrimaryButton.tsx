@@ -1,6 +1,6 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
-import { COLORS } from '../constants/theme';
+import { ViewStyle } from 'react-native';
+import { GradientButton } from './GradientButton';
 
 export function PrimaryButton({
   label,
@@ -14,39 +14,13 @@ export function PrimaryButton({
   disabled?: boolean;
 }) {
   return (
-    <Pressable
-      style={({ pressed }) => [
-        styles.button,
-        pressed && !disabled ? styles.pressed : null,
-        disabled ? styles.disabled : null,
-        style,
-      ]}
+    <GradientButton
+      label={label}
       onPress={onPress}
+      style={style}
       disabled={disabled}
-    >
-      <Text style={styles.text}>{label}</Text>
-    </Pressable>
+      height={44}
+      radius={12}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  button: {
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.button,
-  },
-  pressed: {
-    opacity: 0.92,
-  },
-  disabled: {
-    opacity: 0.55,
-  },
-  text: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-  },
-});

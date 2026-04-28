@@ -1,6 +1,8 @@
+import { useMemo, useRef, useState } from 'react';
 import {
   Image,
   ImageBackground,
+  PanResponder,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -49,7 +51,21 @@ export function SearchScreen({
   onContinue?: () => void;
 }) {
   const items = stations ?? [];
-  const activeId = selectedStationId || items[0]?._id || null;
+  const [minBattery, setMinBattery] = useState(0);
+  const [maxDistance, setMaxDistance] = useState(20);
+
+  const filteredItems = useMemo(
+    () =>
+      items.filter((s) => {
+        const battery =
+          typeof s.averageBatteryPercent === 'number' ? s.averageBatteryPercent : 100;
+        const distance = typeof s.distanceKm === 'number' ? s.distanceKm : 0;
+        return battery >= minBattery && distance <= maxDistance;
+      }),
+    [items, minBattery, maxDistance],
+  );
+
+  const activeId = selectedStationId || filteredItems[0]?._id || null;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -81,20 +97,24 @@ export function SearchScreen({
         </View>
 
         <View style={styles.sliderRow}>
-          <View style={styles.sliderCol}>
-            <Text style={styles.sliderLabel}>Min Battery: 67%</Text>
-            <View style={styles.sliderTrack}>
-              <View style={[styles.sliderFill, { width: '67%' }]} />
-              <View style={[styles.sliderThumb, { left: '64%' }]} />
-            </View>
-          </View>
-          <View style={styles.sliderCol}>
-            <Text style={styles.sliderLabel}>Max Distance: 5 km</Text>
-            <View style={styles.sliderTrack}>
-              <View style={[styles.sliderFill, { width: '72%' }]} />
-              <View style={[styles.sliderThumb, { left: '69%' }]} />
-            </View>
-          </View>
+          <FilterSlider
+            label="Min Battery"
+            suffix="%"
+            value={minBattery}
+            min={0}
+            max={100}
+            step={1}
+            onChange={setMinBattery}
+          />
+          <FilterSlider
+            label="Max Distance"
+            suffix=" km"
+            value={maxDistance}
+            min={1}
+            max={20}
+            step={1}
+            onChange={setMaxDistance}
+          />
         </View>
       </View>
 
@@ -105,13 +125,19 @@ export function SearchScreen({
       >
         {loading ? (
           <Text style={styles.loadingText}>Loading stations...</Text>
-        ) : items.length === 0 ? (
+        ) : filteredItems.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No live stations found</Text>
-            <Text style={styles.emptyBody}>The backend did not return any available stations for this area yet.</Text>
+            <Text style={styles.emptyTitle}>
+              {items.length === 0 ? 'No live stations found' : 'No stations match your filters'}
+            </Text>
+            <Text style={styles.emptyBody}>
+              {items.length === 0
+                ? 'The backend did not return any available stations for this area yet.'
+                : 'Try lowering Min Battery or increasing Max Distance.'}
+            </Text>
           </View>
         ) : (
-          items.map((station) => {
+          filteredItems.map((station) => {
             const active = station._id === activeId;
             const distance =
               station.distanceKm != null ? `${station.distanceKm.toFixed(1)} km` : '—';
@@ -138,12 +164,16 @@ export function SearchScreen({
                   <Stat
                     icon={<SmallScooterIcon size={18} color="#16a34a" />}
                     label="Available"
-                    value={String(station.availableScooties ?? 0)}
+                    value={String(station.availableScooters ?? 0)}
                   />
                   <Stat
                     icon={<BatteryIcon size={18} color="#16a34a" />}
                     label="Avg Battery"
-                    value="—"
+                    value={
+                      typeof station.averageBatteryPercent === 'number'
+                        ? `${station.averageBatteryPercent}%`
+                        : '—'
+                    }
                   />
                   <Stat
                     icon={<WalkerIcon size={18} color="#4a5565" />}
@@ -161,6 +191,74 @@ export function SearchScreen({
         <GradientButton label="Continue to Book" onPress={() => onContinue?.()} height={52} />
       </View>
     </SafeAreaView>
+  );
+}
+
+function FilterSlider({
+  label,
+  suffix,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  suffix: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (next: number) => void;
+}) {
+  const widthRef = useRef(1);
+  const pageXRef = useRef(0);
+  const trackRef = useRef<View>(null);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  const updateFromPageX = (pageX: number) => {
+    const x = pageX - pageXRef.current;
+    const fraction = Math.max(0, Math.min(1, x / widthRef.current));
+    const raw = min + fraction * (max - min);
+    const stepped = Math.round(raw / step) * step;
+    onChangeRef.current(Math.max(min, Math.min(max, stepped)));
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => updateFromPageX(e.nativeEvent.pageX),
+      onPanResponderMove: (e) => updateFromPageX(e.nativeEvent.pageX),
+    }),
+  ).current;
+
+  const fraction = (value - min) / (max - min);
+
+  return (
+    <View style={styles.sliderCol}>
+      <Text style={styles.sliderLabel}>
+        {label}: {value}
+        {suffix}
+      </Text>
+      <View
+        ref={trackRef}
+        style={styles.sliderHitArea}
+        onLayout={(e) => {
+          widthRef.current = e.nativeEvent.layout.width;
+          trackRef.current?.measure((_x, _y, _w, _h, pageX) => {
+            pageXRef.current = pageX;
+          });
+        }}
+        {...panResponder.panHandlers}
+      >
+        <View style={styles.sliderTrack}>
+          <View style={[styles.sliderFill, { width: `${fraction * 100}%` }]} />
+          <View style={[styles.sliderThumb, { left: `${fraction * 100}%` }]} />
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -266,12 +364,16 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 18,
   },
+  sliderHitArea: {
+    height: 28,
+    justifyContent: 'center',
+    marginTop: 2,
+  },
   sliderTrack: {
     height: 4,
     borderRadius: 999,
     backgroundColor: 'rgba(15, 23, 42, 0.12)',
     position: 'relative',
-    marginTop: 6,
   },
   sliderFill: {
     height: 4,
@@ -283,6 +385,7 @@ const styles = StyleSheet.create({
     top: -5,
     width: 14,
     height: 14,
+    marginLeft: -7,
     borderRadius: 7,
     backgroundColor: '#fc4c02',
     borderWidth: 2,

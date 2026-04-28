@@ -148,9 +148,14 @@ function PayRow({
       </Pressable>
 
       {showPayButton ? (
-        <Pressable style={styles.payButton} onPress={onSelect}>
-          <Text style={styles.payButtonText}>Pay using {option.label}</Text>
-        </Pressable>
+        <GradientButton
+          label={`Pay using ${option.label}`}
+          onPress={onSelect}
+          height={47}
+          radius={12}
+          style={styles.payButton}
+          labelStyle={styles.payButtonText}
+        />
       ) : null}
     </View>
   );
@@ -289,11 +294,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 16,
     marginHorizontal: 78,
-    height: 47,
-    borderRadius: 12,
-    backgroundColor: '#fc4c02',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   payButtonText: {
     color: '#ffffff',

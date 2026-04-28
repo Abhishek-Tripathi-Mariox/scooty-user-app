@@ -140,7 +140,8 @@ export type StationItem = {
     latitude: number;
     longitude: number;
   };
-  availableScooties?: number;
+  availableScooters?: number;
+  averageBatteryPercent?: number | null;
   distanceKm?: number | null;
 };
 

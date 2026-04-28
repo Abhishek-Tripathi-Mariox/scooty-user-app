@@ -8,7 +8,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Svg, { Path, Rect } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { AppBackground } from '../components/AppBackground';
 import { BottomTabs, type TabKey } from '../components/BottomTabs';
 import { GradientButton } from '../components/GradientButton';
@@ -102,10 +102,8 @@ function PhoneIcon({ color }: { color: string }) {
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
       <Path
-        d="M22 16v3.5a2 2 0 0 1-2.2 2A20 20 0 0 1 2.5 4.2 2 2 0 0 1 4.5 2H8a1 1 0 0 1 1 .8l1 4a1 1 0 0 1-.3 1L8 9.5a15 15 0 0 0 6.5 6.5l1.7-1.7a1 1 0 0 1 1-.3l4 1a1 1 0 0 1 .8 1Z"
-        stroke={color}
-        strokeWidth={1.8}
-        strokeLinejoin="round"
+        d="M20.487 17.14l-4.065-3.696a1 1 0 0 0-1.391.043l-2.393 2.461c-.576-.11-1.734-.471-2.926-1.66-1.192-1.193-1.553-2.354-1.66-2.926l2.459-2.394a1 1 0 0 0 .043-1.391L6.86 3.513a1 1 0 0 0-1.391-.087l-2.396 2.06a1 1 0 0 0-.291.649c-.015.25-.301 6.172 4.291 10.766C11.479 20.892 16.5 21.25 17.883 21.25c.202 0 .326-.007.359-.009a1 1 0 0 0 .649-.292l2.06-2.396a1 1 0 0 0-.064-1.413z"
+        fill={color}
       />
     </Svg>
   );
@@ -115,10 +113,8 @@ function ChatIcon({ color }: { color: string }) {
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
       <Path
-        d="M4 5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-4 4v-4H6a2 2 0 0 1-2-2V5Z"
-        stroke={color}
-        strokeWidth={1.8}
-        strokeLinejoin="round"
+        d="M20 2H4a2 2 0 0 0-2 2v18l4-4h14a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2zM7 9h10v2H7V9zm6 5H7v-2h6v2zm4-6H7V6h10v2z"
+        fill={color}
       />
     </Svg>
   );
@@ -127,8 +123,10 @@ function ChatIcon({ color }: { color: string }) {
 function MailIcon({ color }: { color: string }) {
   return (
     <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-      <Rect x={3} y={5} width={18} height={14} rx={2} stroke={color} strokeWidth={1.8} />
-      <Path d="m3 7 9 6 9-6" stroke={color} strokeWidth={1.8} strokeLinejoin="round" />
+      <Path
+        d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"
+        fill={color}
+      />
     </Svg>
   );
 }
@@ -169,11 +167,11 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   headerTitle: {
-    marginLeft: 8,
-    color: '#1c1c1e',
-    fontSize: 20,
-    fontWeight: '600',
-    lineHeight: 28,
+    color: '#101828',
+    fontFamily: 'Arimo',
+    fontSize: 18,
+    fontWeight: '700',
+    lineHeight: 27,
   },
   scroll: {
     flex: 1,
@@ -222,9 +220,10 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     color: '#101828',
+    fontFamily: 'Arimo',
     fontSize: 18,
     fontWeight: '700',
-    lineHeight: 26,
+    lineHeight: 27,
   },
   textareaWrap: {
     borderWidth: 1,
@@ -245,6 +244,7 @@ const styles = StyleSheet.create({
   },
   faqTitle: {
     color: '#101828',
+    fontFamily: 'Arimo',
     fontSize: 18,
     fontWeight: '700',
     lineHeight: 27,

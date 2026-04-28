@@ -1,6 +1,4 @@
-import React from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { COLORS } from '../constants/theme';
 import { useResponsiveLayout } from '../utils/responsive';
 
 const HomeIcon = require('../assets/images/home.png');
@@ -9,6 +7,9 @@ const NotificationIcon = require('../assets/images/notification.png');
 const ProfileIcon = require('../assets/images/profile.png');
 
 export type TabKey = 'home' | 'booking' | 'notification' | 'profile';
+
+const ACTIVE_COLOR = '#ff7a44';
+const INACTIVE_COLOR = 'rgba(54,54,54,0.8)';
 
 export function BottomTabs({
   active,
@@ -19,21 +20,33 @@ export function BottomTabs({
 }) {
   const layout = useResponsiveLayout();
   return (
-    <View style={[styles.bar, { height: layout.tabBarHeight }]}>
-      {tabs.map((tab) => (
-        <Pressable key={tab.key} style={styles.tab} onPress={() => onTabPress(tab.key)}>
-          <View
-            style={[
-              styles.iconWrap,
-              { width: layout.tabIconWrapSize, height: layout.tabIconWrapSize, borderRadius: layout.tabIconWrapSize / 2 },
-              active === tab.key && styles.iconWrapActive,
-            ]}
-          >
-            <Image source={tab.icon} style={[styles.iconImage, { width: layout.tabIconSize, height: layout.tabIconSize }]} resizeMode="contain" />
-          </View>
-          <Text style={[styles.label, { fontSize: layout.tabLabelSize }, active === tab.key && styles.active]}>{tab.label}</Text>
-        </Pressable>
-      ))}
+    <View style={[styles.bar, { height: Math.max(layout.tabBarHeight, 70) }]}>
+      {tabs.map((tab) => {
+        const isActive = active === tab.key;
+        return (
+          <Pressable key={tab.key} style={styles.tab} onPress={() => onTabPress(tab.key)}>
+            <View style={[styles.indicator, !isActive && styles.indicatorHidden]} />
+            <Image
+              source={tab.icon}
+              style={[
+                styles.iconImage,
+                { width: layout.tabIconSize, height: layout.tabIconSize },
+                { tintColor: isActive ? ACTIVE_COLOR : INACTIVE_COLOR },
+              ]}
+              resizeMode="contain"
+            />
+            <Text
+              style={[
+                styles.label,
+                { fontSize: layout.tabLabelSize },
+                { color: isActive ? ACTIVE_COLOR : INACTIVE_COLOR },
+              ]}
+            >
+              {tab.label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
@@ -49,31 +62,40 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    alignItems: 'center',
+    alignItems: 'flex-end',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     borderTopWidth: 1,
-    borderTopColor: '#ece3de',
-    backgroundColor: '#fff',
+    borderColor: 'rgba(255,255,255,0.62)',
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    paddingBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 6,
   },
   tab: {
     alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 44,
+    justifyContent: 'flex-end',
+    flex: 1,
+    paddingTop: 6,
+    paddingBottom: 4,
   },
-  iconWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  indicator: {
+    width: 28,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: ACTIVE_COLOR,
+    marginBottom: 6,
   },
-  iconWrapActive: {
-    backgroundColor: 'rgba(245, 133, 87, 0.12)',
+  indicatorHidden: {
+    backgroundColor: 'transparent',
   },
   iconImage: {
+    marginBottom: 4,
   },
   label: {
-    marginTop: 3,
-    color: '#7b8191',
-    fontWeight: '700',
-  },
-  active: {
-    color: COLORS.button,
+    fontWeight: '500',
   },
 });

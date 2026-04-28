@@ -28,6 +28,7 @@ type ProfileMenuItem = {
   title: string;
   subtitle?: string;
   icon: ImageSourcePropType;
+  iconSize?: number;
 };
 
 export function ProfileScreen({
@@ -62,7 +63,7 @@ export function ProfileScreen({
 
   const menu: ProfileMenuItem[] = [
     { key: 'bookings', title: 'My Bookings', icon: BookingIcon },
-    { key: 'history', title: 'Ride History', icon: RideHistoryIcon },
+    { key: 'history', title: 'Ride History', icon: RideHistoryIcon, iconSize: 40 },
     { key: 'offers', title: 'Offers & Rewards', icon: OfferIcon },
     { key: 'support', title: 'Help & Support', icon: HelpIcon },
   ];
@@ -121,7 +122,11 @@ function MenuRow({ item, onPress }: { item: ProfileMenuItem; onPress: () => void
   return (
     <Pressable style={styles.menuRow} onPress={onPress}>
       <View style={styles.menuIconWrap}>
-        <Image source={item.icon} style={styles.menuIcon} resizeMode="contain" />
+        <Image
+          source={item.icon}
+          style={[styles.menuIcon, item.iconSize ? { width: item.iconSize, height: item.iconSize } : null]}
+          resizeMode="contain"
+        />
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.menuTitle}>{item.title}</Text>
@@ -189,11 +194,12 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   headerTitle: {
-    marginLeft: 8,
-    color: '#1c1c1e',
+    color: '#1C1C1E',
+    fontFamily: 'Poppins',
     fontSize: 20,
+    fontStyle: 'normal',
     fontWeight: '600',
-    lineHeight: 28,
+    lineHeight: 32,
   },
   profileCard: {
     marginHorizontal: 0,

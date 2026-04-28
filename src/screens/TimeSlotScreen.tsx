@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
+import { GradientFill } from '../components/GradientFill';
 import { ArrowLeftIcon, CalendarIcon, ClockIcon } from '../components/RideIcons';
 import type { TimeSlotItem } from '../services/userApi';
 import type { RidePlan } from './RidePlanScreen';
@@ -170,6 +171,7 @@ function Chip({
       disabled={disabled}
       style={[styles.chip, { height }, active && styles.chipActive, disabled && styles.chipDisabled]}
     >
+      {active ? <GradientFill radius={10} /> : null}
       <Text
         style={[
           styles.chipText,
@@ -297,9 +299,9 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.62)',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   chipActive: {
-    backgroundColor: '#fc4c02',
     borderColor: '#fc4c02',
   },
   chipDisabled: {

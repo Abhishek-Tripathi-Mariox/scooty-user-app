@@ -1,7 +1,7 @@
 export const COLORS = {
-  background: '#efe8e4',
-  loginSurface: '#f7ece4',
-  otpSurface: '#f4ddd2',
+  background: '#ffd1b0',
+  loginSurface: '#ffd1b0',
+  otpSurface: '#ffd1b0',
   card: 'rgba(255,255,255,0.56)',
   cardStrong: 'rgba(255,255,255,0.42)',
   cardBorder: 'rgba(255,255,255,0.65)',

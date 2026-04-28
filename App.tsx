@@ -45,6 +45,8 @@ import {
   userApi,
   userApiErrorMessage,
 } from './src/services/userApi';
+import { fetchCoordsIfAllowed } from './src/utils/location';
+import { formatCurrency, formatDateTime } from './src/utils/format';
 
 type AppStep =
   | 'splash'
@@ -134,18 +136,27 @@ const mapBackendPlanToRidePlan = (plan: PlanItem): RidePlan => {
   };
 };
 
-const mapStationToPickupStation = (station: StationItem, fallbackId: string): PickupStation => ({
-  id: station._id || fallbackId,
-  name: station.name || 'Station unavailable',
-  address: station.address || 'Address unavailable',
-  distance:
+const mapStationToPickupStation = (station: StationItem, fallbackId: string): PickupStation => {
+  const distanceKm =
     typeof station.distanceKm === 'number' && Number.isFinite(station.distanceKm)
-      ? `${station.distanceKm.toFixed(1)} km`
-      : '—',
-  available: Number(station.availableScooties ?? 0),
-  battery: '—',
-  parking: 'Parking unavailable',
-});
+      ? station.distanceKm
+      : null;
+  const walkMinutes = distanceKm != null ? Math.max(1, Math.round(distanceKm * 12)) : null;
+  const battery =
+    typeof station.averageBatteryPercent === 'number' && Number.isFinite(station.averageBatteryPercent)
+      ? `${station.averageBatteryPercent}%`
+      : '—';
+
+  return {
+    id: station._id || fallbackId,
+    name: station.name || 'Station unavailable',
+    address: station.address || 'Address unavailable',
+    distance: distanceKm != null ? `${distanceKm.toFixed(1)} km` : '—',
+    available: Number(station.availableScooters ?? 0),
+    battery,
+    parking: walkMinutes != null ? `${walkMinutes} min walk` : '—',
+  };
+};
 
 const resolveRidePlanCode = (plan?: RidePlan | null) => plan?.code || mapRidePlanIdToPlanCode(plan?.id || null);
 
@@ -251,10 +262,13 @@ export default function App() {
     if (!token) return [];
 
     const plansResult = await userApi.plans(token, stationId || undefined);
-    const mappedPlans =
-      plansResult.plans && plansResult.plans.length > 0
-        ? plansResult.plans.map(mapBackendPlanToRidePlan)
-        : [];
+    const rawPlans = plansResult.plans ?? [];
+    const stationPlans = stationId
+      ? rawPlans.filter(
+          (plan) => typeof plan.availableScooters === 'number' && plan.availableScooters > 0,
+        )
+      : rawPlans;
+    const mappedPlans = stationPlans.map(mapBackendPlanToRidePlan);
 
     setAvailableRidePlans(mappedPlans);
     setSelectedRidePlan((current) => {
@@ -365,6 +379,37 @@ export default function App() {
     void loadBookings();
   }, [step, token]);
 
+  const refreshLiveLocation = async (
+    authToken: string,
+    profileUser: User,
+  ): Promise<{ latitude: number; longitude: number } | null> => {
+    if (!profileUser?.settings?.permissions?.location) return null;
+
+    const coords = await fetchCoordsIfAllowed();
+    if (!coords) return null;
+
+    try {
+      const result = await userApi.updateSettings(authToken, {
+        location: {
+          isEnabled: true,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          accuracy: coords.accuracy ?? null,
+          city: profileUser.city || profileUser.settings?.location?.city || '',
+          state: profileUser.state || profileUser.settings?.location?.state || '',
+          pincode: profileUser.pincode || profileUser.settings?.location?.pincode || '',
+          source: 'gps',
+          updatedAt: new Date().toISOString(),
+        },
+      });
+      setUser(result.user);
+    } catch (error) {
+      console.warn('Failed to persist live location:', error);
+    }
+
+    return { latitude: coords.latitude, longitude: coords.longitude };
+  };
+
   const loadUserData = async () => {
     try {
       if (!token) return;
@@ -374,7 +419,12 @@ export default function App() {
       setUser(profileResult.user);
       setDashboard(profileResult.dashboard);
 
-      const stationsResult = await userApi.stations(token);
+      const liveCoords = await refreshLiveLocation(token, profileResult.user);
+      const storedLocation = profileResult.user?.settings?.location;
+      const stationsResult = await userApi.stations(token, {
+        latitude: liveCoords?.latitude ?? storedLocation?.latitude ?? undefined,
+        longitude: liveCoords?.longitude ?? storedLocation?.longitude ?? undefined,
+      });
       setStations(stationsResult.stations);
 
       try {
@@ -445,7 +495,10 @@ export default function App() {
     }
   };
 
-  const handlePermissionsContinue = async (permissions: Record<'location' | 'camera' | 'notifications', boolean>) => {
+  const handlePermissionsContinue = async (
+    permissions: Record<'location' | 'camera' | 'notifications', boolean>,
+    coords: { latitude: number; longitude: number; accuracy?: number | null } | null,
+  ) => {
     try {
       setLoading(true);
       if (token) {
@@ -454,13 +507,29 @@ export default function App() {
           language: user?.settings?.language || 'en',
           location: {
             isEnabled: permissions.location,
+            latitude: coords?.latitude ?? null,
+            longitude: coords?.longitude ?? null,
+            accuracy: coords?.accuracy ?? null,
             city: user?.city || '',
             state: user?.state || '',
             pincode: user?.pincode || '',
-            source: 'profile',
+            source: coords ? 'gps' : 'profile',
+            updatedAt: new Date().toISOString(),
           },
         });
         setUser(result.user);
+
+        if (coords) {
+          try {
+            const stationsResult = await userApi.stations(token, {
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+            });
+            setStations(stationsResult.stations);
+          } catch (error) {
+            console.warn('Failed to refresh stations after location update:', error);
+          }
+        }
       }
     } catch (error) {
       Alert.alert('Error', userApiErrorMessage(error));
@@ -710,6 +779,75 @@ export default function App() {
     setStep('scan-qr');
   };
 
+  const handleViewBookingDetails = (booking: BookingItem) => {
+    const lines: string[] = [];
+    if (booking._id) lines.push(`Booking ID: ${booking._id}`);
+    if (booking.status) lines.push(`Status: ${booking.status}`);
+    const planTitle = booking.planName || booking.planType || booking.planCode;
+    if (planTitle) lines.push(`Plan: ${planTitle}`);
+    const vehicle =
+      booking.scooter?.modelName ||
+      booking.vehicleId?.modelName ||
+      booking.scooter?.registrationNumber ||
+      booking.vehicleId?.registrationNumber;
+    if (vehicle) lines.push(`Vehicle: ${vehicle}`);
+    const pickupName = booking.pickupStation?.name || booking.pickupStationId?.name;
+    if (pickupName) lines.push(`Pickup: ${pickupName}`);
+    const dropName = booking.dropStation?.name || booking.dropStationId?.name;
+    if (dropName) lines.push(`Drop: ${dropName}`);
+    const dateLabel = booking.schedule?.dateLabel || booking.schedule?.date || booking.date;
+    if (dateLabel) lines.push(`Date: ${dateLabel}`);
+    const startLabel = booking.schedule?.startLabel || formatDateTime(booking.startAt);
+    const endLabel = booking.schedule?.endLabel || formatDateTime(booking.endAt);
+    if (startLabel && endLabel) {
+      lines.push(`Time: ${startLabel} - ${endLabel}`);
+    } else if (startLabel) {
+      lines.push(`Start: ${startLabel}`);
+    }
+    if (booking.unlockCode) lines.push(`Unlock Code: ${booking.unlockCode}`);
+    if (typeof booking.actualDurationMinutes === 'number') {
+      lines.push(`Actual Duration: ${booking.actualDurationMinutes} min`);
+    } else if (typeof booking.durationHours === 'number') {
+      lines.push(`Duration: ${booking.durationHours} hr`);
+    }
+    Alert.alert('Booking Details', lines.length ? lines.join('\n') : 'No details available.');
+  };
+
+  const handleViewBookingReceipt = (booking: BookingItem) => {
+    const lines: string[] = [];
+    if (booking._id) lines.push(`Booking ID: ${booking._id}`);
+    if (booking.payment?.status) lines.push(`Payment Status: ${booking.payment.status}`);
+    if (booking.payment?.method) lines.push(`Method: ${booking.payment.method}`);
+    if (booking.payment?.referenceId) lines.push(`Reference: ${booking.payment.referenceId}`);
+    if (booking.payment?.paidAt) lines.push(`Paid At: ${formatDateTime(booking.payment.paidAt)}`);
+    if (typeof booking.payment?.paidAmount === 'number') {
+      lines.push(`Paid: ${formatCurrency(booking.payment.paidAmount)}`);
+    } else if (typeof booking.pricing?.totalPayable === 'number') {
+      lines.push(`Total: ${formatCurrency(booking.pricing.totalPayable)}`);
+    }
+    if (typeof booking.pricing?.baseFare === 'number') {
+      lines.push(`Base Fare: ${formatCurrency(booking.pricing.baseFare)}`);
+    }
+    if (typeof booking.pricing?.securityDeposit === 'number' && booking.pricing.securityDeposit > 0) {
+      lines.push(`Security Deposit: ${formatCurrency(booking.pricing.securityDeposit)}`);
+    }
+    if (typeof booking.pricing?.convenienceFee === 'number' && booking.pricing.convenienceFee > 0) {
+      lines.push(`Convenience Fee: ${formatCurrency(booking.pricing.convenienceFee)}`);
+    }
+    if (typeof booking.pricing?.tax === 'number' && booking.pricing.tax > 0) {
+      lines.push(`Tax: ${formatCurrency(booking.pricing.tax)}`);
+    }
+    if (typeof booking.pricing?.discount === 'number' && booking.pricing.discount > 0) {
+      lines.push(`Discount: -${formatCurrency(booking.pricing.discount)}`);
+    }
+    if (booking.refund?.status) {
+      lines.push(`Refund: ${booking.refund.status}${
+        typeof booking.refund.amount === 'number' ? ` (${formatCurrency(booking.refund.amount)})` : ''
+      }`);
+    }
+    Alert.alert('Receipt', lines.length ? lines.join('\n') : 'No payment details available.');
+  };
+
   const handleScannedCode = (code: string) => {
     setSelectedRide((current) =>
       current
@@ -798,7 +936,14 @@ export default function App() {
         loading={loading}
         activeTab={activeTab}
         onTabPress={handleTabPress}
-        onBookScooty={startBookingFlow}
+        onBookScooty={(stationId) => {
+          if (!stationId) {
+            setStep('search');
+            return;
+          }
+          const station = stations?.find((s) => s._id === stationId) ?? null;
+          startBookingFlow(station);
+        }}
         onViewAll={() => setStep('search')}
         onReferPress={() => setStep('offers')}
       />
@@ -888,6 +1033,8 @@ export default function App() {
         activeTab={activeTab}
         onStartRide={() => setStep('pre-ride')}
         onCancelBooking={() => setStep('ride-cancel')}
+        onViewDetails={handleViewBookingDetails}
+        onViewReceipt={handleViewBookingReceipt}
       />
     );
   }
