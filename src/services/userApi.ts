@@ -36,7 +36,31 @@ export type User = {
   role?: string;
   profilePhotoUrl?: string;
   walletBalance?: number;
+  kycStatus?: 'NOT_SUBMITTED' | 'PENDING' | 'APPROVED' | 'REJECTED' | string;
+  kycRejectionReason?: string;
+  kycSubmittedAt?: string;
+  kycVerifiedAt?: string;
+  adharFile?: string;
+  panFile?: string;
   settings?: UserSettings;
+};
+
+export type UserKyc = {
+  status?: string;
+  rejectionReason?: string;
+  submittedAt?: string | null;
+  verifiedAt?: string | null;
+  documents?: {
+    profilePhotoUrl?: string;
+    adharFile?: string;
+    panFile?: string;
+  };
+};
+
+export type KycUploadFiles = {
+  profilePhoto?: KycUploadFile | null;
+  adharFile?: KycUploadFile | null;
+  panFile?: KycUploadFile | null;
 };
 
 export type Dashboard = {
@@ -439,6 +463,28 @@ export const userApi = {
     request<{ user: User; dashboard: Dashboard }>('/user/me', { token }),
   me: (token: string) =>
     request<{ user: User; dashboard: Dashboard }>('/user/me', { token }),
+  kyc: (token: string) => request<{ kyc: UserKyc }>('/user/kyc', { token }),
+  submitKyc: (token: string, files: KycUploadFiles = {}) => {
+    const formData = new FormData();
+    const append = (field: string, file?: KycUploadFile | null) => {
+      if (!file) return;
+      formData.append(field, {
+        uri: file.uri,
+        name: file.name,
+        type: file.type,
+      } as unknown as Blob);
+    };
+    append('profilePhoto', files.profilePhoto);
+    append('adharFile', files.adharFile);
+    append('panFile', files.panFile);
+
+    return request<{ kyc: UserKyc }>('/user/kyc', {
+      method: 'PATCH',
+      token,
+      body: formData,
+      isFormData: true,
+    });
+  },
   wallet: (token: string) =>
     request<{ wallet: WalletSummary }>('/user/wallet', { token }),
   updateProfile: (

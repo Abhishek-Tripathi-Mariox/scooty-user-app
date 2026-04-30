@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, NativeModules, Platform, StyleSheet, Text, View } from 'react-native';
+import { Alert, AppState, NativeModules, Platform, StyleSheet, Text, View } from 'react-native';
+import DocumentPicker from 'react-native-document-picker';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { OtpScreen } from './src/screens/OtpScreen';
+import { RegisterScreen } from './src/screens/RegisterScreen';
+import { KycScreen } from './src/screens/KycScreen';
+import { PendingApprovalScreen } from './src/screens/PendingApprovalScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { PermissionsScreen } from './src/screens/PermissionsScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
@@ -35,6 +39,8 @@ import {
   BookingItem,
   BookingQuote,
   Dashboard,
+  KycUploadFile,
+  KycUploadFiles,
   NotificationItem,
   PlanItem,
   RideItem,
@@ -51,6 +57,9 @@ import { formatCurrency, formatDateTime } from './src/utils/format';
 type AppStep =
   | 'splash'
   | AuthStep
+  | 'register'
+  | 'kyc'
+  | 'pending-approval'
   | 'permissions'
   | 'dashboard'
   | 'search'
@@ -208,6 +217,14 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [token, setToken] = useState<string | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const [kycFiles, setKycFiles] = useState<KycUploadFiles>({});
+  const [kycSubmitting, setKycSubmitting] = useState(false);
+  const [registerForm, setRegisterForm] = useState({
+    fullName: '',
+    email: '',
+    city: '',
+    acceptedTerms: false,
+  });
 
   // User data state
   const [user, setUser] = useState<User | null>(null);
@@ -249,13 +266,7 @@ export default function App() {
   };
 
   const hasCompletedPermissions = (settings?: User['settings'] | null) => {
-    const permissions = settings?.permissions;
-    return Boolean(
-      permissions &&
-        (permissions.location !== undefined ||
-          permissions.camera !== undefined ||
-          permissions.notifications !== undefined),
-    );
+    return Boolean(settings?.location?.updatedAt);
   };
 
   const loadRidePlans = async (stationId?: string | null) => {
@@ -327,6 +338,31 @@ export default function App() {
         setUser(result.user);
         setDashboard(result.dashboard);
 
+        const kycStatus = result.user?.kycStatus;
+        if (kycStatus === 'PENDING' || kycStatus === 'REJECTED') {
+          setStep('pending-approval');
+          return;
+        }
+        if (kycStatus !== 'APPROVED') {
+          const isProfileComplete = Boolean(
+            result.user?.name?.trim() &&
+              result.user?.email?.trim() &&
+              (result.user?.city?.trim() || result.user?.adress?.trim()),
+          );
+          if (!isProfileComplete) {
+            setRegisterForm({
+              fullName: result.user?.name || '',
+              email: result.user?.email || '',
+              city: result.user?.city || '',
+              acceptedTerms: false,
+            });
+            setStep('register');
+            return;
+          }
+          setStep('kyc');
+          return;
+        }
+
         if (hasCompletedPermissions(result.user?.settings)) {
           setActiveTab('home');
           setStep('dashboard');
@@ -356,6 +392,43 @@ export default function App() {
       loadUserData();
     }
   }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    if (step !== 'pending-approval') return;
+    let active = true;
+    let inFlight = false;
+
+    const sync = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const kycStatus = await refreshKycStatus(token);
+        if (!active) return;
+        if (kycStatus === 'APPROVED') {
+          if (hasCompletedPermissions(user?.settings)) {
+            setActiveTab('home');
+            setStep('dashboard');
+          } else {
+            setStep('permissions');
+          }
+        }
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void sync();
+    const subscription = AppState.addEventListener('change', (next) => {
+      if (next === 'active') void sync();
+    });
+
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, step]);
 
   useEffect(() => {
     if (!token || step !== 'time-slot') return;
@@ -465,7 +538,15 @@ export default function App() {
       setStep('otp');
       setOtp('');
     } catch (error) {
-      Alert.alert('Error', userApiErrorMessage(error));
+      const message = userApiErrorMessage(error);
+      if (/OWNER\s+account/i.test(message)) {
+        Alert.alert(
+          'Use the Owner app',
+          'This mobile number is registered as a vehicle owner. Please install and login with the MOVYRA Owner app to continue.',
+        );
+      } else {
+        Alert.alert('Could not send OTP', message);
+      }
     } finally {
       setLoading(false);
     }
@@ -487,7 +568,35 @@ export default function App() {
       void persistAuthToken(result.token);
       setUser(result.user);
       setActiveTab('home');
-      setStep('permissions');
+
+      const kycStatus = result.user?.kycStatus;
+      if (kycStatus === 'PENDING' || kycStatus === 'REJECTED') {
+        setStep('pending-approval');
+        return;
+      }
+      if (kycStatus === 'APPROVED') {
+        setStep('permissions');
+        return;
+      }
+
+      const isProfileComplete = Boolean(
+        result.user?.name?.trim() &&
+          result.user?.email?.trim() &&
+          (result.user?.city?.trim() || result.user?.adress?.trim()),
+      );
+
+      if (!isProfileComplete) {
+        setRegisterForm({
+          fullName: result.user?.name || '',
+          email: result.user?.email || '',
+          city: result.user?.city || '',
+          acceptedTerms: false,
+        });
+        setStep('register');
+        return;
+      }
+
+      setStep('kyc');
     } catch (error) {
       Alert.alert('Error', userApiErrorMessage(error));
     } finally {
@@ -549,9 +658,94 @@ export default function App() {
       setOtp('');
       Alert.alert('Success', 'OTP sent again');
     } catch (error) {
-      Alert.alert('Error', userApiErrorMessage(error));
+      const message = userApiErrorMessage(error);
+      if (/OWNER\s+account/i.test(message)) {
+        Alert.alert(
+          'Use the Owner app',
+          'This mobile number is registered as a vehicle owner. Please install and login with the MOVYRA Owner app to continue.',
+        );
+      } else {
+        Alert.alert('Could not send OTP', message);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRegisterContinue = async () => {
+    if (!token) return;
+    const { fullName, email, city, acceptedTerms } = registerForm;
+    if (!fullName.trim() || !email.trim() || !city.trim() || !acceptedTerms) {
+      Alert.alert('Incomplete details', 'Please fill all fields and accept the terms.');
+      return;
+    }
+    try {
+      setLoading(true);
+      const result = await userApi.updateProfile(token, {
+        name: fullName.trim(),
+        email: email.trim(),
+        city: city.trim(),
+      });
+      setUser(result.user);
+      setStep('kyc');
+    } catch (error) {
+      Alert.alert('Could not save details', userApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePickKycDocument = async (field: keyof KycUploadFiles) => {
+    try {
+      const picked = await DocumentPicker.pickSingle({
+        type: [DocumentPicker.types.images, DocumentPicker.types.pdf],
+        copyTo: 'cachesDirectory',
+      });
+      const file: KycUploadFile = {
+        uri: picked.fileCopyUri || picked.uri,
+        name: picked.name || `${field}.jpg`,
+        type: picked.type || 'application/octet-stream',
+        size: picked.size ?? null,
+      };
+      setKycFiles((prev) => ({ ...prev, [field]: file }));
+    } catch (error) {
+      if (!DocumentPicker.isCancel(error)) {
+        Alert.alert('Document upload', 'Could not open the file picker.');
+      }
+    }
+  };
+
+  const handleSubmitKyc = async () => {
+    if (!token) return;
+    if (!kycFiles.profilePhoto || !kycFiles.adharFile || !kycFiles.panFile) {
+      Alert.alert(
+        'Select all documents',
+        'Please upload Aadhaar, PAN, and profile photo before submitting.',
+      );
+      return;
+    }
+
+    try {
+      setKycSubmitting(true);
+      await userApi.submitKyc(token, kycFiles);
+      setKycFiles({});
+      setUser((current) => (current ? { ...current, kycStatus: 'PENDING' } : current));
+      setStep('pending-approval');
+    } catch (error) {
+      Alert.alert('Could not submit KYC', userApiErrorMessage(error));
+    } finally {
+      setKycSubmitting(false);
+    }
+  };
+
+  const refreshKycStatus = async (sessionToken: string) => {
+    try {
+      const result = await userApi.profile(sessionToken);
+      setUser(result.user);
+      setDashboard(result.dashboard);
+      return result.user?.kycStatus;
+    } catch {
+      return undefined;
     }
   };
 
@@ -914,6 +1108,57 @@ export default function App() {
         onVerify={handleVerifyOtp}
         onResend={handleResendOtp}
         loading={loading}
+      />
+    );
+  }
+
+  if (step === 'register') {
+    return (
+      <RegisterScreen
+        fullName={registerForm.fullName}
+        email={registerForm.email}
+        mobileNumber={mobileNumber ? `+91 ${mobileNumber}` : ''}
+        city={registerForm.city}
+        acceptedTerms={registerForm.acceptedTerms}
+        onToggleTerms={() =>
+          setRegisterForm((prev) => ({ ...prev, acceptedTerms: !prev.acceptedTerms }))
+        }
+        onChangeFullName={(v) => setRegisterForm((prev) => ({ ...prev, fullName: v }))}
+        onChangeEmail={(v) => setRegisterForm((prev) => ({ ...prev, email: v }))}
+        onChangeMobile={() => undefined}
+        onChangeCity={(v) => setRegisterForm((prev) => ({ ...prev, city: v }))}
+        onContinue={handleRegisterContinue}
+        onLoginPress={handleLogout}
+        loading={loading}
+      />
+    );
+  }
+
+  if (step === 'kyc') {
+    return (
+      <KycScreen
+        onBack={() => setStep('register')}
+        onSubmit={handleSubmitKyc}
+        onPickDocument={handlePickKycDocument}
+        documents={kycFiles}
+        existingDocuments={{
+          adharFileUrl: user?.adharFile,
+          panFileUrl: user?.panFile,
+          profilePhotoUrl: user?.profilePhotoUrl,
+        }}
+        loading={kycSubmitting}
+      />
+    );
+  }
+
+  if (step === 'pending-approval') {
+    return (
+      <PendingApprovalScreen
+        userName={user?.name || 'User'}
+        status={user?.kycStatus || 'PENDING'}
+        rejectionReason={user?.kycRejectionReason}
+        onRetryKyc={() => setStep('kyc')}
+        onLogout={handleLogout}
       />
     );
   }
