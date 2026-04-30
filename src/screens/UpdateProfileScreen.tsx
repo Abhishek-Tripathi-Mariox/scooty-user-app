@@ -1,34 +1,121 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
   ImageSourcePropType,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
-  type StyleProp,
-  type ViewStyle,
 } from 'react-native';
 import DocumentPicker, { type DocumentPickerResponse } from 'react-native-document-picker';
-import { GradientFill } from '../components/GradientFill';
-import { PageFrame } from '../components/PageFrame';
-import { PrimaryButton } from '../components/PrimaryButton';
-import { COLORS, SPACING } from '../constants/theme';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
+import { AppBackground } from '../components/AppBackground';
+import { GradientButton } from '../components/GradientButton';
+import { ArrowLeftIcon } from '../components/RideIcons';
 import type { KycUploadFile, User } from '../services/userApi';
 import { compressImage } from '../utils/image-compression';
 
 const DefaultAvatar = require('../assets/images/profile.png');
-const CameraIcon = require('../assets/images/camera.png');
 
 type ProfileFormState = {
   name: string;
   email: string;
   city: string;
   address: string;
-  language: string;
+  pincode: string;
 };
+
+function IndianFlag({ size = 22 }: { size?: number }) {
+  const stripeH = size / 3;
+  const cx = size / 2;
+  const cy = size / 2;
+  const chakraR = stripeH * 0.4;
+  return (
+    <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <Rect x={0} y={0} width={size} height={stripeH} fill="#FF9933" />
+      <Rect x={0} y={stripeH} width={size} height={stripeH} fill="#FFFFFF" />
+      <Rect x={0} y={stripeH * 2} width={size} height={stripeH} fill="#138808" />
+      <Circle cx={cx} cy={cy} r={chakraR} stroke="#000080" strokeWidth={1} fill="none" />
+      <Line x1={cx - chakraR} y1={cy} x2={cx + chakraR} y2={cy} stroke="#000080" strokeWidth={0.6} />
+      <Line x1={cx} y1={cy - chakraR} x2={cx} y2={cy + chakraR} stroke="#000080" strokeWidth={0.6} />
+      <Line x1={cx - chakraR * 0.7} y1={cy - chakraR * 0.7} x2={cx + chakraR * 0.7} y2={cy + chakraR * 0.7} stroke="#000080" strokeWidth={0.5} />
+      <Line x1={cx - chakraR * 0.7} y1={cy + chakraR * 0.7} x2={cx + chakraR * 0.7} y2={cy - chakraR * 0.7} stroke="#000080" strokeWidth={0.5} />
+    </Svg>
+  );
+}
+
+function VerifiedCheck({ size = 18 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={12} r={10} fill="#0f172a" />
+      <Path
+        d="M8 12.5l2.5 2.5L16 9"
+        stroke="#FFFFFF"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function CameraIcon({ size = 32, color = '#ffffff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 48 48" fill="none">
+      <Path
+        d="M14 16h4l2-3h8l2 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H14a2 2 0 0 1-2-2V18a2 2 0 0 1 2-2z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Circle cx={24} cy={24} r={5} stroke={color} strokeWidth={2} />
+    </Svg>
+  );
+}
+
+function FloatingField({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  keyboardType = 'default',
+  editable = true,
+  autoCapitalize,
+  chipColor,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder?: string;
+  keyboardType?: 'default' | 'email-address' | 'number-pad' | 'phone-pad';
+  editable?: boolean;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  chipColor?: string;
+}) {
+  return (
+    <View style={styles.field}>
+      <View style={[styles.labelChip, chipColor ? { backgroundColor: chipColor } : null]}>
+        <Text style={styles.labelChipText}>{label}</Text>
+      </View>
+      <TextInput
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="rgba(27,29,33,0.4)"
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        editable={editable}
+        style={styles.input}
+      />
+    </View>
+  );
+}
 
 export function UpdateProfileScreen({
   user,
@@ -53,20 +140,15 @@ export function UpdateProfileScreen({
   }, [user]);
 
   const avatarSource = useMemo(() => getAvatarSource(photoPreviewUri), [photoPreviewUri]);
-  const initials = getInitials(form.name || user?.name || '');
-  const canSave = form.name.trim().length > 0 && !loading;
 
   const handleSave = async () => {
     const normalizedName = form.name.trim();
     const normalizedEmail = form.email.trim();
-    const normalizedCity = form.city.trim();
-    const normalizedAddress = form.address.trim();
-    const normalizedLanguage = form.language.trim();
 
     if (!normalizedName) {
+      Alert.alert('Required', 'Please enter your full name.');
       return;
     }
-
     if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
       Alert.alert('Invalid email', 'Please enter a valid email address.');
       return;
@@ -76,22 +158,22 @@ export function UpdateProfileScreen({
       {
         name: normalizedName,
         email: normalizedEmail,
-        city: normalizedCity,
-        address: normalizedAddress,
-        language: normalizedLanguage,
+        city: form.city.trim(),
+        address: form.address.trim(),
+        pincode: form.pincode.trim(),
       },
       selectedPhoto,
     );
   };
 
   const handlePickPhoto = async () => {
+    if (photoPicking) return;
     try {
       setPhotoPicking(true);
       const picked = await DocumentPicker.pickSingle({
         type: [DocumentPicker.types.images],
         copyTo: 'cachesDirectory',
       });
-
       const normalized = await normalizePickedImage(picked);
       setSelectedPhoto(normalized);
       setPhotoPreviewUri(normalized.uri);
@@ -106,122 +188,110 @@ export function UpdateProfileScreen({
 
   return (
     <View style={styles.root}>
-      <PageFrame title="Profile" onBack={onBack}>
-        <View style={styles.content}>
-          <View style={styles.heroCard}>
-            <View style={styles.avatarWrap}>
-              <Image source={avatarSource} style={styles.avatarImage} />
-              {!photoPreviewUri.trim() ? (
-                <View style={styles.initialsFallback}>
-                  <Text style={styles.initialsText}>{initials}</Text>
-                </View>
-              ) : null}
-              <Pressable style={styles.cameraBadge} onPress={handlePickPhoto} disabled={photoPicking}>
-                <GradientFill radius={17} />
-                <Image source={CameraIcon} style={styles.cameraIcon} resizeMode="contain" />
-              </Pressable>
-            </View>
+      <AppBackground variant="auth" />
 
-            <View style={styles.heroText}>
-              <Text style={styles.heroName}>{form.name.trim() || 'Your profile'}</Text>
-              <Text style={styles.heroSubtext}>
-                Tap the camera icon to upload a new photo.
-              </Text>
+      <View style={styles.topbar}>
+        <Pressable onPress={onBack} style={styles.back} hitSlop={10}>
+          <ArrowLeftIcon size={24} color="#0f172a" />
+        </Pressable>
+        <Text style={styles.heading}>Profile</Text>
+      </View>
+
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          automaticallyAdjustKeyboardInsets
+          showsVerticalScrollIndicator={false}
+        >
+          <Pressable style={styles.avatarWrap} onPress={handlePickPhoto}>
+            <View style={styles.avatar}>
+              <Image source={avatarSource} style={styles.avatarImage} resizeMode="cover" />
             </View>
-          </View>
+            <View style={styles.avatarOverlay} pointerEvents="none">
+              <CameraIcon size={32} color="#ffffff" />
+            </View>
+          </Pressable>
 
           <View style={styles.formCard}>
-            <Field label="Full Name">
-              <TextInput
-                value={form.name}
-                onChangeText={(value) => setForm((current) => ({ ...current, name: value }))}
-                placeholder="Enter full name"
-                placeholderTextColor={COLORS.textMuted}
-                style={styles.input}
-              />
-            </Field>
+            <FloatingField
+              label="Full Name"
+              value={form.name}
+              onChangeText={(v) => setForm((c) => ({ ...c, name: v }))}
+              placeholder="Enter full name"
+              chipColor="#ffebe1"
+            />
 
-            <Field label="Mobile Number" helper="This is linked to your account and cannot be changed here.">
-              <View style={styles.readOnlyField}>
-                <Text style={styles.readOnlyText}>{formatPhone(user?.mobile || '')}</Text>
+            <FloatingField
+              label="Email Address"
+              value={form.email}
+              onChangeText={(v) => setForm((c) => ({ ...c, email: v }))}
+              placeholder="your@email.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              chipColor="#ffe5dd"
+            />
+
+            <View style={styles.field}>
+              <View style={[styles.labelChip, { backgroundColor: '#ffe0dd' }]}>
+                <Text style={styles.labelChipText}>Phone Number</Text>
               </View>
-            </Field>
-
-            <Field label="Email Address">
-              <TextInput
-                value={form.email}
-                onChangeText={(value) => setForm((current) => ({ ...current, email: value }))}
-                placeholder="Enter email address"
-                placeholderTextColor={COLORS.textMuted}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                style={styles.input}
-              />
-            </Field>
-
-            <View style={styles.row}>
-              <Field label="City" containerStyle={styles.halfField}>
-                <TextInput
-                  value={form.city}
-                  onChangeText={(value) => setForm((current) => ({ ...current, city: value }))}
-                  placeholder="City"
-                  placeholderTextColor={COLORS.textMuted}
-                  style={styles.input}
-                />
-              </Field>
-
-              <Field label="Language" containerStyle={[styles.halfField, styles.halfFieldRight]}>
-                <TextInput
-                  value={form.language}
-                  onChangeText={(value) => setForm((current) => ({ ...current, language: value }))}
-                  placeholder="English"
-                  placeholderTextColor={COLORS.textMuted}
-                  style={styles.input}
-                />
-              </Field>
+              <View style={[styles.input, styles.phoneRow]}>
+                <View style={styles.flagCircle}>
+                  <IndianFlag size={22} />
+                </View>
+                <Text style={styles.phoneText} numberOfLines={1}>
+                  {user?.mobile ? `+91 ${user.mobile}` : '+91 98765 43210'}
+                </Text>
+                <VerifiedCheck size={20} />
+              </View>
             </View>
 
-            <Field label="Address">
-              <TextInput
-                value={form.address}
-                onChangeText={(value) => setForm((current) => ({ ...current, address: value }))}
-                placeholder="House no, street, area"
-                placeholderTextColor={COLORS.textMuted}
-                multiline
-                textAlignVertical="top"
-                style={[styles.input, styles.textArea]}
-              />
-            </Field>
-
-            <PrimaryButton
-              label={loading ? 'Saving...' : 'Save Changes'}
-              onPress={handleSave}
-              style={styles.button}
-              disabled={!canSave}
+            <FloatingField
+              label="Current Address"
+              value={form.address}
+              onChangeText={(v) => setForm((c) => ({ ...c, address: v }))}
+              placeholder="Enter current address"
+              chipColor="#fcd5db"
             />
-          </View>
-        </View>
-      </PageFrame>
-    </View>
-  );
-}
 
-function Field({
-  label,
-  helper,
-  children,
-  containerStyle,
-}: {
-  label: string;
-  helper?: string;
-  children: React.ReactNode;
-  containerStyle?: StyleProp<ViewStyle>;
-}) {
-  return (
-    <View style={containerStyle}>
-      <Text style={styles.label}>{label}</Text>
-      {helper ? <Text style={styles.helper}>{helper}</Text> : null}
-      {children}
+            <View style={styles.row}>
+              <View style={styles.rowHalf}>
+                <FloatingField
+                  label="Zip Code"
+                  value={form.pincode}
+                  onChangeText={(v) => setForm((c) => ({ ...c, pincode: v }))}
+                  placeholder="203207"
+                  keyboardType="number-pad"
+                  chipColor="#f8e1e3"
+                />
+              </View>
+              <View style={styles.rowHalf}>
+                <FloatingField
+                  label="City"
+                  value={form.city}
+                  onChangeText={(v) => setForm((c) => ({ ...c, city: v }))}
+                  placeholder="City"
+                  chipColor="#f3e9e9"
+                />
+              </View>
+            </View>
+          </View>
+
+          <GradientButton
+            label={loading ? 'Saving...' : 'Save Changes'}
+            onPress={handleSave}
+            disabled={loading}
+            height={56}
+            radius={12}
+            style={styles.saveButton}
+          />
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -232,34 +302,13 @@ function buildForm(user?: User | null): ProfileFormState {
     email: user?.email || '',
     city: user?.city || '',
     address: user?.address || user?.adress || '',
-    language: user?.settings?.language || '',
+    pincode: user?.pincode || '',
   };
 }
 
 function getAvatarSource(profilePhotoUrl: string): ImageSourcePropType {
-  if (!profilePhotoUrl.trim()) {
-    return DefaultAvatar;
-  }
-
+  if (!profilePhotoUrl.trim()) return DefaultAvatar;
   return { uri: profilePhotoUrl.trim() };
-}
-
-function getInitials(name: string) {
-  return name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0] || '')
-    .join('')
-    .toUpperCase();
-}
-
-function formatPhone(value: string) {
-  if (!value) return '+91 98765 43210';
-  const digits = value.replace(/[^\d+]/g, '').trim();
-  if (digits.startsWith('+')) return digits;
-  if (digits.length === 10) return `+91 ${digits}`;
-  return value;
 }
 
 async function normalizePickedImage(picked: DocumentPickerResponse): Promise<KycUploadFile> {
@@ -267,7 +316,6 @@ async function normalizePickedImage(picked: DocumentPickerResponse): Promise<Kyc
   const fileName = picked.name || `profile-photo-${Date.now()}.jpg`;
   const mimeType = picked.type || 'image/jpeg';
   const compressed = await compressImage(sourceUri, fileName, 'photo');
-
   return {
     uri: compressed.uri,
     name: fileName,
@@ -277,148 +325,190 @@ async function normalizePickedImage(picked: DocumentPickerResponse): Promise<Kyc
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  content: {
-    paddingBottom: 18,
-  },
-  heroCard: {
-    borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.68)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.78)',
-    paddingHorizontal: 16,
-    paddingVertical: 18,
-    shadowColor: '#d8b9a8',
-    shadowOpacity: 0.18,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 2,
+  root: { flex: 1, backgroundColor: 'transparent' },
+  flex: { flex: 1 },
+  topbar: {
+    height: 82,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.62)',
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
+  },
+  back: {
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heading: {
+    color: '#000000',
+    fontSize: 24,
+    fontWeight: '500',
+    lineHeight: 32,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 32,
   },
   avatarWrap: {
-    width: 78,
-    height: 78,
-    borderRadius: 39,
+    width: 104,
+    height: 104,
+    borderRadius: 36,
+    alignSelf: 'center',
+    marginBottom: 32,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  avatar: {
+    width: 104,
+    height: 104,
+    borderRadius: 36,
+    backgroundColor: '#3a2a22',
+    overflow: 'hidden',
   },
   avatarImage: {
     width: '100%',
     height: '100%',
   },
-  initialsFallback: {
+  avatarOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-  },
-  initialsText: {
-    color: COLORS.textPrimary,
-    fontWeight: '900',
-    fontSize: 18,
-  },
-  cameraBadge: {
-    position: 'absolute',
-    right: -4,
-    bottom: -4,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  cameraIcon: {
-    width: 16,
-    height: 16,
-    tintColor: '#fff',
-  },
-  heroText: {
-    flex: 1,
-    paddingLeft: 14,
-  },
-  heroName: {
-    color: COLORS.textPrimary,
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  heroSubtext: {
-    marginTop: 6,
-    color: COLORS.textSecondary,
-    fontSize: 12,
-    lineHeight: 18,
+    backgroundColor: 'rgba(22,22,22,0.7)',
   },
   formCard: {
-    marginTop: 14,
-    borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.64)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.76)',
-    padding: 16,
-    shadowColor: '#d8b9a8',
-    shadowOpacity: 0.16,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 2,
+    gap: 24,
+    marginBottom: 24,
   },
-  row: {
-    flexDirection: 'row',
+  field: {
+    position: 'relative',
   },
-  halfField: {
-    flex: 1,
+  labelChip: {
+    position: 'absolute',
+    top: -8,
+    left: 16,
+    paddingHorizontal: 8,
+    backgroundColor: '#fbe6d6',
+    zIndex: 2,
   },
-  halfFieldRight: {
-    marginLeft: 12,
-  },
-  label: {
-    color: COLORS.textPrimary,
-    fontSize: 13,
-    fontWeight: '800',
-    marginBottom: 8,
-  },
-  helper: {
-    color: COLORS.textSecondary,
-    fontSize: 11,
-    marginTop: -4,
-    marginBottom: 8,
+  labelChipText: {
+    color: 'rgba(27,29,33,0.5)',
+    fontSize: 12,
     lineHeight: 16,
   },
   input: {
-    minHeight: 44,
-    borderRadius: SPACING.controlRadius,
+    height: 56,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.line,
-    backgroundColor: COLORS.inputBg,
-    color: '#2b3141',
+    borderColor: 'rgba(27,29,33,0.18)',
+    paddingHorizontal: 24,
+    color: '#1b1d21',
     fontSize: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
   },
-  textArea: {
-    minHeight: 88,
-    textAlignVertical: 'top',
+  phoneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
   },
-  readOnlyField: {
-    minHeight: 44,
-    borderRadius: SPACING.controlRadius,
+  flagCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     borderWidth: 1,
-    borderColor: COLORS.line,
-    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderColor: 'rgba(0,0,0,0.08)',
+    overflow: 'hidden',
+    marginRight: 12,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
   },
-  readOnlyText: {
-    color: COLORS.textSecondary,
+  phoneText: {
+    flex: 1,
+    color: '#1b1d21',
     fontSize: 14,
-    fontWeight: '600',
   },
-  button: {
+  selector: {
+    height: 56,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(27,29,33,0.1)',
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  selectorText: {
+    flex: 1,
+    color: '#1b1d21',
+    fontSize: 14,
+    marginRight: 8,
+  },
+  selectorPlaceholder: {
+    color: 'rgba(27,29,33,0.4)',
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  rowHalf: {
+    flex: 1,
+  },
+  saveButton: {
     marginTop: 8,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalBackdropTouchable: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalCard: {
+    width: '88%',
+    maxHeight: '70%',
+    backgroundColor: '#ffffff',
+    borderRadius: 24,
+    padding: 16,
+  },
+  modalTitle: {
+    color: '#1b1d21',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  searchInput: {
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    paddingHorizontal: 14,
+    color: '#1b1d21',
+    fontSize: 14,
+    marginBottom: 12,
+  },
+  stateList: {
+    maxHeight: 320,
+  },
+  stateItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  stateItemText: {
+    color: '#1b1d21',
+    fontSize: 15,
+  },
+  emptyText: {
+    color: '#94a3b8',
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: 24,
   },
 });

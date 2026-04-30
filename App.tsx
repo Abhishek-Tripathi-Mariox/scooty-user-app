@@ -823,7 +823,7 @@ export default function App() {
     email: string;
     city: string;
     address: string;
-    language: string;
+    pincode?: string;
   }, profilePhoto?: { uri: string; name: string; type: string; size?: number | null } | null) => {
     if (!token) {
       Alert.alert('Error', 'You need to be signed in to update your profile.');
@@ -837,7 +837,7 @@ export default function App() {
         email: payload.email || undefined,
         city: payload.city || undefined,
         address: payload.address || undefined,
-        language: payload.language || undefined,
+        pincode: payload.pincode || undefined,
       }, profilePhoto || null);
 
       setUser(result.user);
