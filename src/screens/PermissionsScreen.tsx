@@ -227,9 +227,6 @@ const styles = StyleSheet.create({
     paddingTop: 24,
     paddingHorizontal: 0,
     borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.62)',
     padding: 24,
   },
 });
