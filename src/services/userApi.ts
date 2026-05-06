@@ -457,6 +457,16 @@ export const userApi = {
       method: 'POST',
       body: payload,
     }),
+  signup: (payload: {
+    mobile: string;
+    name: string;
+    address: string;
+    city: string;
+  }) =>
+    request<{ token: string; user: User }>('/user/auth/signup', {
+      method: 'POST',
+      body: payload,
+    }),
   dashboard: (token: string) =>
     request<{ dashboard: Dashboard }>('/user/dashboard', { token }),
   profile: (token: string) =>

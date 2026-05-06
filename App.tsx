@@ -586,12 +586,12 @@ export default function App() {
       );
 
       if (!isProfileComplete) {
-        setRegisterForm({
-          fullName: result.user?.name || '',
-          email: result.user?.email || '',
-          city: result.user?.city || '',
-          acceptedTerms: false,
-        });
+        setRegisterForm((prev) => ({
+          fullName: prev.fullName || result.user?.name || '',
+          email: prev.email || result.user?.email || '',
+          city: prev.city || result.user?.city || '',
+          acceptedTerms: prev.acceptedTerms,
+        }));
         setStep('register');
         return;
       }
@@ -673,12 +673,55 @@ export default function App() {
   };
 
   const handleRegisterContinue = async () => {
-    if (!token) return;
     const { fullName, email, city, acceptedTerms } = registerForm;
     if (!fullName.trim() || !email.trim() || !city.trim() || !acceptedTerms) {
       Alert.alert('Incomplete details', 'Please fill all fields and accept the terms.');
       return;
     }
+    if (!token) {
+      if (!mobileNumber || mobileNumber.length !== 10) {
+        Alert.alert('Error', 'Please enter a valid 10-digit mobile number');
+        return;
+      }
+      try {
+        setLoading(true);
+        const result = await userApi.signup({
+          mobile: mobileNumber,
+          name: fullName.trim(),
+          address: city.trim(),
+          city: city.trim(),
+        });
+        setToken(result.token);
+        void persistAuthToken(result.token);
+
+        let finalUser = result.user;
+        try {
+          const updated = await userApi.updateProfile(result.token, {
+            email: email.trim(),
+          });
+          finalUser = updated.user;
+        } catch {
+          // email update is best-effort; signup already succeeded
+        }
+        setUser(finalUser);
+        setActiveTab('home');
+        setStep('kyc');
+      } catch (error) {
+        const message = userApiErrorMessage(error);
+        if (/OWNER\s+account/i.test(message)) {
+          Alert.alert(
+            'Use the Owner app',
+            'This mobile number is registered as a vehicle owner. Please install and login with the MOVYRA Owner app to continue.',
+          );
+        } else {
+          Alert.alert('Could not sign up', message);
+        }
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
       setLoading(true);
       const result = await userApi.updateProfile(token, {
@@ -1092,6 +1135,14 @@ export default function App() {
         mobileNumber={mobileNumber}
         onChangeMobile={setMobileNumber}
         onContinue={handleSendOtp}
+        onRegisterPress={() => {
+          void clearAuthToken();
+          setToken(null);
+          setUser(null);
+          setMobileNumber('');
+          setRegisterForm({ fullName: '', email: '', city: '', acceptedTerms: false });
+          setStep('register');
+        }}
         loading={loading}
       />
     );
@@ -1117,7 +1168,7 @@ export default function App() {
       <RegisterScreen
         fullName={registerForm.fullName}
         email={registerForm.email}
-        mobileNumber={mobileNumber ? `+91 ${mobileNumber}` : ''}
+        mobileNumber={mobileNumber}
         city={registerForm.city}
         acceptedTerms={registerForm.acceptedTerms}
         onToggleTerms={() =>
@@ -1125,10 +1176,10 @@ export default function App() {
         }
         onChangeFullName={(v) => setRegisterForm((prev) => ({ ...prev, fullName: v }))}
         onChangeEmail={(v) => setRegisterForm((prev) => ({ ...prev, email: v }))}
-        onChangeMobile={() => undefined}
+        onChangeMobile={(v) => setMobileNumber(v.replace(/\D/g, '').slice(0, 10))}
         onChangeCity={(v) => setRegisterForm((prev) => ({ ...prev, city: v }))}
         onContinue={handleRegisterContinue}
-        onLoginPress={handleLogout}
+        onLoginPress={() => setStep('login')}
         loading={loading}
       />
     );

@@ -19,11 +19,13 @@ export function LoginScreen({
   mobileNumber,
   onChangeMobile,
   onContinue,
+  onRegisterPress,
   loading = false,
 }: {
   mobileNumber: string;
   onChangeMobile: (value: string) => void;
   onContinue: () => void;
+  onRegisterPress?: () => void;
   loading?: boolean;
 }) {
   const handleChange = (value: string) => {
@@ -72,6 +74,13 @@ export function LoginScreen({
               disabled={!canSubmit}
               style={styles.button}
             />
+          </View>
+
+          <View style={styles.footerBlock}>
+            <Text style={styles.footerHint}>New to MOVYRA?</Text>
+            <Text style={styles.footerLink} onPress={onRegisterPress}>
+              Register as Rider
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -138,5 +147,21 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 21,
+  },
+  footerBlock: {
+    alignItems: 'center',
+    marginTop: 32,
+  },
+  footerHint: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: '#101828',
+    marginBottom: 12,
+  },
+  footerLink: {
+    color: '#fc4c02',
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 21,
   },
 });

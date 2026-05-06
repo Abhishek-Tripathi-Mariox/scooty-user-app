@@ -94,9 +94,8 @@ export function RegisterScreen({
               label="Mobile Number"
               value={mobileNumber}
               onChangeText={onChangeMobile}
-              placeholder="+91 98765 43210"
+              placeholder="Enter your mobile number"
               keyboardType="phone-pad"
-              editable={false}
             />
             <LabeledInput
               label="City"
