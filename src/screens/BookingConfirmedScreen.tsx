@@ -1,4 +1,4 @@
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SafeAreaView, ScrollView, Text, View } from 'react-native';
 import { AppBackground } from '../components/AppBackground';
 import { ShareIcon } from '../components/HomeIcons';
 import {
@@ -7,6 +7,7 @@ import {
   LocationIcon,
   SmallScooterIcon,
 } from '../components/RideIcons';
+import { useStyles } from '../utils/responsiveStyles';
 
 export function BookingConfirmedScreen({
   onViewDetails,
@@ -30,6 +31,7 @@ export function BookingConfirmedScreen({
   duration?: string;
   rideStartsIn?: string;
 }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <SafeAreaView style={styles.safe}>
       <AppBackground variant="auth" />
@@ -98,7 +100,7 @@ export function BookingConfirmedScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -280,4 +282,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 20,
   },
-});
+} as const;

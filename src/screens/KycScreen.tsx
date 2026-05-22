@@ -1,9 +1,10 @@
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SafeAreaView, ScrollView, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
 import { ArrowLeftIcon } from '../components/RideIcons';
 import type { KycUploadFiles } from '../services/userApi';
+import { useStyles } from '../utils/responsiveStyles';
 
 type KycField = keyof KycUploadFiles;
 
@@ -32,6 +33,7 @@ function UploadCard({
   fileName?: string;
   onPress: () => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const isUploaded = Boolean(fileName);
   return (
     <View style={styles.uploadBlock}>
@@ -71,6 +73,7 @@ export function KycScreen({
   };
   loading?: boolean;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const isReady = Boolean(
     (documents.profilePhoto || existingDocuments?.profilePhotoUrl) &&
       (documents.adharFile || existingDocuments?.adharFileUrl) &&
@@ -138,7 +141,7 @@ export function KycScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: { flex: 1, backgroundColor: '#ffd1b0' },
   header: {
     height: 56,
@@ -212,4 +215,4 @@ const styles = StyleSheet.create({
   submit: {
     marginTop: 8,
   },
-});
+} as const;

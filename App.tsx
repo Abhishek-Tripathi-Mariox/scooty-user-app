@@ -30,6 +30,8 @@ import { SelectParkingStationScreen } from './src/screens/SelectParkingStationSc
 import { ConfirmRideScreen } from './src/screens/ConfirmRideScreen';
 import { PaymentModeScreen } from './src/screens/PaymentModeScreen';
 import { BookingConfirmedScreen } from './src/screens/BookingConfirmedScreen';
+import { BookingDetailScreen } from './src/screens/BookingDetailScreen';
+import { BookingReceiptScreen } from './src/screens/BookingReceiptScreen';
 import { PreRideScreen } from './src/screens/PreRideScreen';
 import { RideCancelScreen } from './src/screens/RideCancelScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
@@ -52,7 +54,7 @@ import {
   userApiErrorMessage,
 } from './src/services/userApi';
 import { fetchCoordsIfAllowed } from './src/utils/location';
-import { formatCurrency, formatDateTime } from './src/utils/format';
+import { formatCurrency } from './src/utils/format';
 
 type AppStep =
   | 'splash'
@@ -85,7 +87,9 @@ type AppStep =
   | 'offers'
   | 'support'
   | 'ride-completed'
-  | 'rate';
+  | 'rate'
+  | 'booking-detail'
+  | 'booking-receipt';
 
 const mapPlanTypeToRidePlanId = (type?: string): RidePlanId => {
   const normalized = String(type || '').trim().toUpperCase();
@@ -164,6 +168,11 @@ const mapStationToPickupStation = (station: StationItem, fallbackId: string): Pi
     available: Number(station.availableScooters ?? 0),
     battery,
     parking: walkMinutes != null ? `${walkMinutes} min walk` : '—',
+    coordinates:
+      typeof station.coordinates?.latitude === 'number' &&
+      typeof station.coordinates?.longitude === 'number'
+        ? { latitude: station.coordinates.latitude, longitude: station.coordinates.longitude }
+        : undefined,
   };
 };
 
@@ -234,6 +243,16 @@ export default function App() {
   const [bookings, setBookings] = useState<BookingItem[] | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[] | null>(null);
   const [transactions, setTransactions] = useState<WalletTransactionItem[] | null>(null);
+  const [referral, setReferral] = useState<{
+    referralCode: string;
+    referralEarnings: number;
+    totalReferrals: number;
+    inviteReward: number;
+    appliedReferral?: string | null;
+  } | null>(null);
+  const [selectedBookingDetail, setSelectedBookingDetail] = useState<BookingItem | null>(null);
+  const [receiptBooking, setReceiptBooking] = useState<BookingItem | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<BookingItem | null>(null);
   const [selectedRide, setSelectedRide] = useState<RideItem | null>(null);
   const [selectedRidePlan, setSelectedRidePlan] = useState<RidePlan | null>(null);
   const [selectedPickupStation, setSelectedPickupStation] = useState<PickupStation | null>(null);
@@ -312,7 +331,7 @@ export default function App() {
 
     const timer = setTimeout(() => {
       setStep('login');
-    }, 1200);
+    }, 3800);
 
     return () => clearTimeout(timer);
   }, [isBootstrapping, step]);
@@ -452,6 +471,11 @@ export default function App() {
     void loadBookings();
   }, [step, token]);
 
+  useEffect(() => {
+    if (!token || step !== 'offers') return;
+    void loadReferral();
+  }, [step, token]);
+
   const refreshLiveLocation = async (
     authToken: string,
     profileUser: User,
@@ -525,6 +549,27 @@ export default function App() {
     }
   };
 
+  const loadReferral = async () => {
+    if (!token) return;
+    try {
+      const result = await userApi.referralSummary(token);
+      setReferral(result.referral);
+    } catch (error) {
+      console.warn('Failed to load referral summary:', error);
+    }
+  };
+
+  const handleApplyReferral = async (code: string) => {
+    if (!token) return;
+    try {
+      await userApi.applyReferralCode(token, code);
+      await loadReferral();
+      Alert.alert('Referral applied', 'Bonus will reflect in your wallet shortly.');
+    } catch (error) {
+      throw new Error(userApiErrorMessage(error));
+    }
+  };
+
   // Handlers
   const handleSendOtp = async () => {
     if (!mobileNumber || mobileNumber.length !== 10) {
@@ -542,7 +587,7 @@ export default function App() {
       if (/OWNER\s+account/i.test(message)) {
         Alert.alert(
           'Use the Owner app',
-          'This mobile number is registered as a vehicle owner. Please install and login with the MOVYRA Owner app to continue.',
+          'This mobile number is registered as a vehicle owner. Please install and login with the Slydo Mobility Owner app to continue.',
         );
       } else {
         Alert.alert('Could not send OTP', message);
@@ -662,7 +707,7 @@ export default function App() {
       if (/OWNER\s+account/i.test(message)) {
         Alert.alert(
           'Use the Owner app',
-          'This mobile number is registered as a vehicle owner. Please install and login with the MOVYRA Owner app to continue.',
+          'This mobile number is registered as a vehicle owner. Please install and login with the Slydo Mobility Owner app to continue.',
         );
       } else {
         Alert.alert('Could not send OTP', message);
@@ -711,7 +756,7 @@ export default function App() {
         if (/OWNER\s+account/i.test(message)) {
           Alert.alert(
             'Use the Owner app',
-            'This mobile number is registered as a vehicle owner. Please install and login with the MOVYRA Owner app to continue.',
+            'This mobile number is registered as a vehicle owner. Please install and login with the Slydo Mobility Owner app to continue.',
           );
         } else {
           Alert.alert('Could not sign up', message);
@@ -931,7 +976,7 @@ export default function App() {
 
   const buildBookingDate = (selection: string) => resolveBookingDate(selection);
 
-  const handleConfirmBooking = async () => {
+  const handleConfirmBooking = async (paymentMethodId: 'CASH' | 'WALLET' = 'CASH') => {
     if (!token || !selectedRidePlan || !selectedPickupStation || !selectedDropStation || !selectedTimeSlot) {
       Alert.alert('Missing details', 'Please choose a plan, time slot, pickup station, and drop station before continuing.');
       return;
@@ -960,15 +1005,29 @@ export default function App() {
       });
       setBookingQuote(quoteResult.quote);
 
+      const totalPayable = Number(quoteResult.quote?.pricing?.totalPayable || 0);
+      const walletBalance = Number(user?.walletBalance ?? dashboard?.walletBalance ?? 0);
+
+      if (paymentMethodId === 'WALLET' && walletBalance < totalPayable) {
+        Alert.alert(
+          'Insufficient wallet balance',
+          `Your wallet has ${formatCurrency(walletBalance)} but the booking total is ${formatCurrency(totalPayable)}. Choose Cash or top up your wallet.`,
+        );
+        return;
+      }
+
+      const walletToUse = paymentMethodId === 'WALLET' ? totalPayable : 0;
+      const paymentMethod = paymentMethodId === 'WALLET' ? 'WALLET' : 'CASH';
+
       const bookingResult = await userApi.createBooking(token, {
         pickupStationId,
         dropStationId,
         planCode,
         date: bookingDate,
         startTime,
-        walletToUse: 0,
-        paymentMethod: 'ONLINE',
-        paymentReferenceId: `PAY-${Date.now()}`,
+        walletToUse,
+        paymentMethod,
+        paymentReferenceId: `${paymentMethod}-${Date.now()}`,
         autoConfirm: true,
       });
       setCreatedBooking(bookingResult.booking);
@@ -1012,77 +1071,41 @@ export default function App() {
     }
   };
 
-  const handleStartRide = () => {
-    setStep('scan-qr');
+  const handleStartRide = async () => {
+    const bookingId = createdBooking?._id || selectedRide?._id;
+    if (!token || !bookingId) {
+      Alert.alert('Cannot start ride', 'Booking is not ready yet. Please try again.');
+      return;
+    }
+    try {
+      setBookingBusy(true);
+      const result = await userApi.startRide(token, bookingId, {
+        unlockCode: createdBooking?.unlockCode || selectedRide?.unlockCode,
+      });
+      setCreatedBooking(result.booking);
+      setSelectedRide({
+        ...result.booking,
+        status: 'ongoing',
+        unlockCode: result.booking.unlockCode,
+        distance: 0,
+        fare: result.booking.pricing?.totalPayable,
+      });
+      setStep('ride-progress');
+    } catch (error) {
+      Alert.alert('Could not start ride', userApiErrorMessage(error));
+    } finally {
+      setBookingBusy(false);
+    }
   };
 
   const handleViewBookingDetails = (booking: BookingItem) => {
-    const lines: string[] = [];
-    if (booking._id) lines.push(`Booking ID: ${booking._id}`);
-    if (booking.status) lines.push(`Status: ${booking.status}`);
-    const planTitle = booking.planName || booking.planType || booking.planCode;
-    if (planTitle) lines.push(`Plan: ${planTitle}`);
-    const vehicle =
-      booking.scooter?.modelName ||
-      booking.vehicleId?.modelName ||
-      booking.scooter?.registrationNumber ||
-      booking.vehicleId?.registrationNumber;
-    if (vehicle) lines.push(`Vehicle: ${vehicle}`);
-    const pickupName = booking.pickupStation?.name || booking.pickupStationId?.name;
-    if (pickupName) lines.push(`Pickup: ${pickupName}`);
-    const dropName = booking.dropStation?.name || booking.dropStationId?.name;
-    if (dropName) lines.push(`Drop: ${dropName}`);
-    const dateLabel = booking.schedule?.dateLabel || booking.schedule?.date || booking.date;
-    if (dateLabel) lines.push(`Date: ${dateLabel}`);
-    const startLabel = booking.schedule?.startLabel || formatDateTime(booking.startAt);
-    const endLabel = booking.schedule?.endLabel || formatDateTime(booking.endAt);
-    if (startLabel && endLabel) {
-      lines.push(`Time: ${startLabel} - ${endLabel}`);
-    } else if (startLabel) {
-      lines.push(`Start: ${startLabel}`);
-    }
-    if (booking.unlockCode) lines.push(`Unlock Code: ${booking.unlockCode}`);
-    if (typeof booking.actualDurationMinutes === 'number') {
-      lines.push(`Actual Duration: ${booking.actualDurationMinutes} min`);
-    } else if (typeof booking.durationHours === 'number') {
-      lines.push(`Duration: ${booking.durationHours} hr`);
-    }
-    Alert.alert('Booking Details', lines.length ? lines.join('\n') : 'No details available.');
+    setSelectedBookingDetail(booking);
+    setStep('booking-detail');
   };
 
   const handleViewBookingReceipt = (booking: BookingItem) => {
-    const lines: string[] = [];
-    if (booking._id) lines.push(`Booking ID: ${booking._id}`);
-    if (booking.payment?.status) lines.push(`Payment Status: ${booking.payment.status}`);
-    if (booking.payment?.method) lines.push(`Method: ${booking.payment.method}`);
-    if (booking.payment?.referenceId) lines.push(`Reference: ${booking.payment.referenceId}`);
-    if (booking.payment?.paidAt) lines.push(`Paid At: ${formatDateTime(booking.payment.paidAt)}`);
-    if (typeof booking.payment?.paidAmount === 'number') {
-      lines.push(`Paid: ${formatCurrency(booking.payment.paidAmount)}`);
-    } else if (typeof booking.pricing?.totalPayable === 'number') {
-      lines.push(`Total: ${formatCurrency(booking.pricing.totalPayable)}`);
-    }
-    if (typeof booking.pricing?.baseFare === 'number') {
-      lines.push(`Base Fare: ${formatCurrency(booking.pricing.baseFare)}`);
-    }
-    if (typeof booking.pricing?.securityDeposit === 'number' && booking.pricing.securityDeposit > 0) {
-      lines.push(`Security Deposit: ${formatCurrency(booking.pricing.securityDeposit)}`);
-    }
-    if (typeof booking.pricing?.convenienceFee === 'number' && booking.pricing.convenienceFee > 0) {
-      lines.push(`Convenience Fee: ${formatCurrency(booking.pricing.convenienceFee)}`);
-    }
-    if (typeof booking.pricing?.tax === 'number' && booking.pricing.tax > 0) {
-      lines.push(`Tax: ${formatCurrency(booking.pricing.tax)}`);
-    }
-    if (typeof booking.pricing?.discount === 'number' && booking.pricing.discount > 0) {
-      lines.push(`Discount: -${formatCurrency(booking.pricing.discount)}`);
-    }
-    if (booking.refund?.status) {
-      lines.push(`Refund: ${booking.refund.status}${
-        typeof booking.refund.amount === 'number' ? ` (${formatCurrency(booking.refund.amount)})` : ''
-      }`);
-    }
-    Alert.alert('Receipt', lines.length ? lines.join('\n') : 'No payment details available.');
+    setReceiptBooking(booking);
+    setStep('booking-receipt');
   };
 
   const handleScannedCode = (code: string) => {
@@ -1110,18 +1133,81 @@ export default function App() {
     setStep('end-ride-station');
   };
 
-  const handleConfirmParking = () => {
-    setSelectedRide((current) =>
-      current
-          ? {
-            ...current,
-            status: 'completed',
-            distance: current.distance || 0,
-            fare: current.fare || current.pricing?.totalPayable || 0,
-          }
-        : current,
-    );
-    setStep('ride-completed');
+  const handleConfirmParking = async () => {
+    const bookingId = selectedRide?._id || createdBooking?._id;
+    if (!token || !bookingId) {
+      Alert.alert('Cannot complete ride', 'No active ride found.');
+      return;
+    }
+    try {
+      setBookingBusy(true);
+      const result = await userApi.completeRide(token, bookingId, {
+        dropStationId: selectedDropStation?.id,
+      });
+      setCreatedBooking(result.booking);
+      setSelectedRide({
+        ...result.booking,
+        status: 'completed',
+        distance: result.booking.distance || 0,
+        fare: result.booking.pricing?.totalPayable || 0,
+      });
+
+      try {
+        const [profileResult, ridesResult, transactionsResult] = await Promise.all([
+          userApi.profile(token),
+          userApi.rides(token),
+          userApi.transactions(token, { limit: 20 }),
+        ]);
+        setUser(profileResult.user);
+        setDashboard(profileResult.dashboard || null);
+        setRides(ridesResult.rides);
+        setTransactions(transactionsResult.transactions || []);
+      } catch {
+        // refresh failures are non-fatal
+      }
+
+      setStep('ride-completed');
+    } catch (error) {
+      Alert.alert('Could not complete ride', userApiErrorMessage(error));
+    } finally {
+      setBookingBusy(false);
+    }
+  };
+
+  const handleCancelBookingPress = (booking: BookingItem) => {
+    setCancelTarget(booking);
+    setStep('ride-cancel');
+  };
+
+  const handleConfirmCancel = async (reason?: string) => {
+    const bookingId = cancelTarget?._id;
+    if (!token || !bookingId) {
+      setStep('bookings');
+      return;
+    }
+    try {
+      setBookingBusy(true);
+      await userApi.cancelBooking(token, bookingId, { reason });
+      try {
+        const [profileResult, bookingsResult, transactionsResult] = await Promise.all([
+          userApi.profile(token),
+          userApi.bookings(token),
+          userApi.transactions(token, { limit: 20 }),
+        ]);
+        setUser(profileResult.user);
+        setDashboard(profileResult.dashboard || null);
+        setBookings(bookingsResult.bookings);
+        setTransactions(transactionsResult.transactions || []);
+      } catch {
+        // best-effort refresh
+      }
+      setCancelTarget(null);
+      setStep('bookings');
+    } catch (error) {
+      Alert.alert('Could not cancel booking', userApiErrorMessage(error));
+    } finally {
+      setBookingBusy(false);
+    }
   };
 
   // Render
@@ -1328,7 +1414,7 @@ export default function App() {
         loading={loading || bookingsLoading}
         activeTab={activeTab}
         onStartRide={() => setStep('pre-ride')}
-        onCancelBooking={() => setStep('ride-cancel')}
+        onCancelBooking={handleCancelBookingPress}
         onViewDetails={handleViewBookingDetails}
         onViewReceipt={handleViewBookingReceipt}
       />
@@ -1339,7 +1425,9 @@ export default function App() {
     return (
       <RideCancelScreen
         onBack={() => setStep('bookings')}
-        onConfirmCancel={() => setStep('bookings')}
+        onConfirmCancel={(reason) => {
+          void handleConfirmCancel(reason);
+        }}
         activeTab={activeTab}
         onTabPress={handleTabPress}
       />
@@ -1418,12 +1506,40 @@ export default function App() {
     );
   }
 
+  if (step === 'booking-detail') {
+    return (
+      <BookingDetailScreen
+        booking={selectedBookingDetail}
+        onBack={() => setStep('bookings')}
+        onViewReceipt={
+          selectedBookingDetail
+            ? () => {
+                setReceiptBooking(selectedBookingDetail);
+                setStep('booking-receipt');
+              }
+            : undefined
+        }
+      />
+    );
+  }
+
+  if (step === 'booking-receipt') {
+    return (
+      <BookingReceiptScreen
+        booking={receiptBooking}
+        onBack={() => setStep(selectedBookingDetail ? 'booking-detail' : 'bookings')}
+      />
+    );
+  }
+
   if (step === 'offers') {
     return (
       <OffersRewardsScreen
         onBack={() => setStep('profile')}
         onTabPress={handleTabPress}
         activeTab={activeTab}
+        referral={referral}
+        onApplyReferral={handleApplyReferral}
       />
     );
   }
@@ -1517,6 +1633,7 @@ export default function App() {
           selectedRidePlan?.price ||
           0
         }
+        walletBalance={Number(user?.walletBalance ?? dashboard?.walletBalance ?? 0)}
         loading={bookingBusy}
       />
     );
@@ -1597,8 +1714,21 @@ export default function App() {
     return (
       <RateYourExperienceScreen
         onBack={() => setStep('ride-completed')}
-        onSubmit={() => {
-          setStep('dashboard');
+        onSubmit={(rating, feedback) => {
+          void (async () => {
+            const bookingId = selectedRide?._id || createdBooking?._id;
+            if (token && bookingId && rating > 0) {
+              try {
+                await userApi.completeRide(token, bookingId, {
+                  rating,
+                  review: feedback,
+                });
+              } catch (error) {
+                console.warn('Could not submit rating:', userApiErrorMessage(error));
+              }
+            }
+            setStep('dashboard');
+          })();
         }}
         onSkip={() => setStep('dashboard')}
       />

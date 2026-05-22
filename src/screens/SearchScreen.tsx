@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import {
   Image,
-  ImageBackground,
   PanResponder,
   Pressable,
   SafeAreaView,
@@ -12,6 +11,7 @@ import {
 } from 'react-native';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
+import { LiveMap } from '../components/LiveMap';
 import {
   AddressPinIcon,
   ArrowLeftIcon,
@@ -22,18 +22,7 @@ import {
 } from '../components/RideIcons';
 import type { StationItem } from '../services/userApi';
 
-const MapBackground = require('../assets/images/explore-map-bg.png');
 const StationThumb = require('../assets/images/station-thumb.jpg');
-const ScootyMarker = require('../assets/images/scooty-marker.png');
-const RedPin = require('../assets/images/red-pin.png');
-
-const MAP_PINS = [
-  { left: 68, top: 130 },
-  { left: 290, top: 88 },
-  { left: 280, top: 182 },
-  { left: 150, top: 196 },
-  { left: 172, top: 80 },
-];
 
 export function SearchScreen({
   onBack,
@@ -71,17 +60,14 @@ export function SearchScreen({
     <SafeAreaView style={styles.safe}>
       <AppBackground variant="auth" />
 
-      <ImageBackground source={MapBackground} style={styles.map} imageStyle={styles.mapImage} resizeMode="cover">
-        {MAP_PINS.map((pin, idx) => (
-          <Image
-            key={idx}
-            source={ScootyMarker}
-            style={[styles.pin, { left: pin.left, top: pin.top }]}
-            resizeMode="contain"
-          />
-        ))}
-        <Image source={RedPin} style={styles.centerPin} resizeMode="contain" />
-      </ImageBackground>
+      <View style={styles.map}>
+        <LiveMap
+          stations={items}
+          selectedStationId={activeId}
+          onSelectStation={(s) => onSelectStation?.(s)}
+          style={StyleSheet.absoluteFillObject}
+        />
+      </View>
 
       <View style={styles.header} pointerEvents="box-none">
         <Pressable onPress={onBack} style={styles.backButton}>
@@ -290,22 +276,7 @@ const styles = StyleSheet.create({
   map: {
     height: 272,
     width: '100%',
-  },
-  mapImage: {
-    opacity: 0.4,
-  },
-  pin: {
-    position: 'absolute',
-    width: 32,
-    height: 32,
-  },
-  centerPin: {
-    position: 'absolute',
-    left: '50%',
-    top: 138,
-    marginLeft: -18,
-    width: 36,
-    height: 36,
+    overflow: 'hidden',
   },
   header: {
     position: 'absolute',

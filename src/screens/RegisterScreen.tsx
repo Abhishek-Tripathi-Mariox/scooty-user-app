@@ -4,13 +4,13 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
+import { useStyles } from '../utils/responsiveStyles';
 
 export function RegisterScreen({
   fullName,
@@ -41,6 +41,7 @@ export function RegisterScreen({
   onLoginPress: () => void;
   loading?: boolean;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const canSubmit =
     !loading &&
     fullName.trim().length > 0 &&
@@ -153,6 +154,7 @@ function LabeledInput({
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   editable?: boolean;
 }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
@@ -170,8 +172,8 @@ function LabeledInput({
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#ffd1b0' },
+const RAW_STYLES = {
+  safe: { flex: 1, backgroundColor: 'transparent' },
   flex: { flex: 1 },
   scrollContent: {
     flexGrow: 1,
@@ -290,4 +292,4 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-});
+} as const;

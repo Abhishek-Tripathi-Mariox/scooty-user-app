@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   FlatList,
   Image,
-  ImageBackground,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -16,6 +15,7 @@ import {
 import { BottomTabs, type TabKey } from '../components/BottomTabs';
 import { GradientButton } from '../components/GradientButton';
 import { MapPinIcon, ScooterIcon, ShareIcon, WalletIcon } from '../components/HomeIcons';
+import { LiveMap } from '../components/LiveMap';
 import { AddressPinIcon, BatteryIcon, ClockIcon } from '../components/RideIcons';
 import { ScreenSurface } from '../components/ScreenSurface';
 import type { Dashboard, User } from '../services/userApi';
@@ -24,22 +24,10 @@ import { formatCurrency } from '../utils/format';
 import { useResponsiveLayout } from '../utils/responsive';
 
 const ScootyImage = require('../assets/images/scooty-3d.png');
-const MapBackground = require('../assets/images/map-bg.png');
-const ScootyMarker = require('../assets/images/scooty-marker.png');
-const RedPin = require('../assets/images/red-pin.png');
 const ReferPerson = require('../assets/images/refer-person.png');
 
 const STATUS_BAR_PAD = Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 8;
 const MAP_HEIGHT = 250;
-
-type MapPin = { id: string; left: `${number}%`; top: `${number}%` };
-const mapPins: MapPin[] = [
-  { id: '1', left: '15%', top: '50%' },
-  { id: '2', left: '72%', top: '38%' },
-  { id: '3', left: '70%', top: '65%' },
-  { id: '4', left: '36%', top: '69%' },
-  { id: '5', left: '42%', top: '35%' },
-];
 
 export function HomeScreen({
   user,
@@ -82,13 +70,15 @@ export function HomeScreen({
   return (
     <ScreenSurface>
       <View style={styles.root}>
-        <ImageBackground
-          source={MapBackground}
-          style={[styles.mapCard, { height: mapHeight }]}
-          imageStyle={styles.mapImage}
-          resizeMode="cover"
-        >
-          <View style={[styles.headerRow, { paddingTop: STATUS_BAR_PAD + 12 }]}>
+        <View style={[styles.mapCard, { height: mapHeight }]}>
+          <LiveMap
+            stations={stations || []}
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View
+            style={[styles.headerRow, { paddingTop: STATUS_BAR_PAD + 12 }]}
+            pointerEvents="box-none"
+          >
             <View style={styles.locationWrap}>
               <MapPinIcon size={20} />
               <View style={{ marginLeft: 8 }}>
@@ -102,22 +92,11 @@ export function HomeScreen({
             <View style={styles.walletPill}>
               <WalletIcon size={20} />
               <Text style={styles.walletText}>
-                {dashboard ? formatCurrency(dashboard.walletBalance) : '₹450'}
+                {dashboard ? formatCurrency(dashboard.walletBalance) : '₹0'}
               </Text>
             </View>
           </View>
-
-          <View style={styles.mapPinsLayer} pointerEvents="none">
-            {mapPins.map((pin) => (
-              <View key={pin.id} style={[styles.mapPin, { left: pin.left, top: pin.top }]}>
-                <Image source={ScootyMarker} style={styles.pinImage} resizeMode="contain" />
-              </View>
-            ))}
-            <View style={styles.centerPin}>
-              <Image source={RedPin} style={styles.centerPinImage} resizeMode="contain" />
-            </View>
-          </View>
-        </ImageBackground>
+        </View>
 
         <View style={styles.bookButtonWrap}>
           <GradientButton
@@ -301,11 +280,6 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 36,
     borderBottomRightRadius: 36,
   },
-  mapImage: {
-    opacity: 0.9,
-    borderBottomLeftRadius: 36,
-    borderBottomRightRadius: 36,
-  },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -352,37 +326,6 @@ const styles = StyleSheet.create({
     color: '#1c1c1e',
     fontSize: 14,
     fontWeight: '600',
-  },
-  mapPinsLayer: {
-    position: 'absolute',
-    top: 90,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  mapPin: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transform: [{ translateX: -16 }, { translateY: -16 }],
-  },
-  pinImage: {
-    width: 32,
-    height: 32,
-  },
-  centerPin: {
-    position: 'absolute',
-    left: '50%',
-    top: '52%',
-    width: 36,
-    height: 36,
-    transform: [{ translateX: -18 }, { translateY: -28 }],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  centerPinImage: {
-    width: 36,
-    height: 36,
   },
   bookButtonWrap: {
     marginTop: -28,

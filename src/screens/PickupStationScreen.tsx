@@ -28,6 +28,7 @@ export type PickupStation = {
   available: number;
   battery: string;
   parking: string;
+  coordinates?: { latitude: number; longitude: number };
 };
 
 export function PickupStationScreen({

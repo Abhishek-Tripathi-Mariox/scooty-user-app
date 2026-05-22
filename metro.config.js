@@ -9,9 +9,6 @@ const {assetExts, sourceExts} = defaultConfig.resolver;
  */
 const config = {
   resetCache: true,
-  assetRegistryPath: require.resolve(
-    '@react-native/assets-registry/registry',
-  ),
   resolver: {
     assetExts: assetExts.filter((ext) => ext !== 'svg'),
     sourceExts: [...sourceExts, 'svg'],

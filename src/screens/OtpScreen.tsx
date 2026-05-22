@@ -4,7 +4,6 @@ import {
   Platform,
   Pressable,
   SafeAreaView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -15,6 +14,7 @@ import { GradientButton } from '../components/GradientButton';
 import { LockIcon } from '../components/LockIcon';
 import { PhoneIcon } from '../components/PhoneIcon';
 import { DEFAULT_PHONE_NUMBER, OTP_LENGTH, RESEND_SECONDS } from '../constants/auth';
+import { useStyles } from '../utils/responsiveStyles';
 
 export function OtpScreen({
   phoneNumber,
@@ -35,6 +35,7 @@ export function OtpScreen({
   onResend?: () => void;
   loading?: boolean;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const [secondsLeft, setSecondsLeft] = useState(RESEND_SECONDS);
   const otpRef = useRef<TextInput>(null);
   void onBack;
@@ -131,23 +132,16 @@ export function OtpScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: '#ffd1b0',
-  },
-  flex: {
-    flex: 1,
-  },
+const RAW_STYLES = {
+  safe: { flex: 1, backgroundColor: 'transparent' },
+  flex: { flex: 1 },
   content: {
     flex: 1,
     alignItems: 'center',
     paddingTop: 63,
     paddingHorizontal: 20,
   },
-  header: {
-    alignItems: 'center',
-  },
+  header: { alignItems: 'center' },
   card: {
     width: '100%',
     maxWidth: 345,
@@ -159,9 +153,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.62)',
   },
-  field: {
-    marginBottom: 16,
-  },
+  field: { marginBottom: 16 },
   label: {
     fontSize: 14,
     fontWeight: '500',
@@ -193,24 +185,15 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     padding: 0,
   },
-  valueText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#717182',
-  },
+  valueText: { flex: 1, fontSize: 16, color: '#717182' },
   helper: {
     marginTop: 8,
     fontSize: 12,
     lineHeight: 16,
     color: '#6a7282',
   },
-  resendLink: {
-    color: '#fc4c02',
-    fontWeight: '600',
-  },
-  loginButton: {
-    marginTop: 4,
-  },
+  resendLink: { color: '#fc4c02', fontWeight: '600' },
+  loginButton: { marginTop: 4 },
   terms: {
     marginTop: 16,
     fontSize: 12,
@@ -218,7 +201,5 @@ const styles = StyleSheet.create({
     color: '#99a1af',
     textAlign: 'center',
   },
-  termsLink: {
-    color: '#99a1af',
-  },
-});
+  termsLink: { color: '#99a1af' },
+} as const;

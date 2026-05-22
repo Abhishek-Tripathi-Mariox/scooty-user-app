@@ -163,7 +163,7 @@ export type StationItem = {
   coordinates?: {
     latitude: number;
     longitude: number;
-  };
+  } | null;
   availableScooters?: number;
   averageBatteryPercent?: number | null;
   distanceKm?: number | null;
@@ -602,6 +602,59 @@ export const userApi = {
     }),
   bookingDetail: (token: string, bookingId: string) =>
     request<{ booking: BookingItem }>(`/user/bookings/${bookingId}`, { token }),
+  confirmPayment: (
+    token: string,
+    bookingId: string,
+    payload: { paymentMethod: string; paymentReferenceId?: string },
+  ) =>
+    request<{ booking: BookingItem }>(`/user/bookings/${bookingId}/pay`, {
+      method: 'POST',
+      token,
+      body: payload,
+    }),
+  startRide: (token: string, bookingId: string, payload: { unlockCode?: string } = {}) =>
+    request<{ booking: BookingItem }>(`/user/bookings/${bookingId}/start`, {
+      method: 'POST',
+      token,
+      body: payload,
+    }),
+  completeRide: (
+    token: string,
+    bookingId: string,
+    payload: {
+      dropStationId?: string;
+      parkingPhotoUrl?: string;
+      rating?: number;
+      review?: string;
+    } = {},
+  ) =>
+    request<{ booking: BookingItem }>(`/user/bookings/${bookingId}/complete`, {
+      method: 'POST',
+      token,
+      body: payload,
+    }),
+  cancelBooking: (token: string, bookingId: string, payload: { reason?: string } = {}) =>
+    request<{ booking: BookingItem }>(`/user/bookings/${bookingId}/cancel`, {
+      method: 'POST',
+      token,
+      body: payload,
+    }),
+  referralSummary: (token: string) =>
+    request<{
+      referral: {
+        referralCode: string;
+        referralEarnings: number;
+        totalReferrals: number;
+        inviteReward: number;
+        appliedReferral: string | null;
+        invitees: { name?: string; mobile?: string; createdAt?: string }[];
+      };
+    }>('/user/referral', { token }),
+  applyReferralCode: (token: string, referralCode: string) =>
+    request<{ referral: { referralCode: string; referralEarnings: number } }>(
+      '/user/referral/apply',
+      { method: 'POST', token, body: { referralCode } },
+    ),
   notifications: (token: string, type?: string) =>
     request<{ notifications: NotificationItem[] }>('/user/notifications', {
       token,

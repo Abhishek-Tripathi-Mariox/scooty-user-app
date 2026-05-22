@@ -135,7 +135,7 @@ function SosModal({ visible, onClose }: { visible: boolean; onClose: () => void 
           </View>
           <Text style={styles.sosTitle}>Emergency SOS</Text>
           <Text style={styles.sosBody}>
-            Need immediate help? Contact emergency services or movyra support.
+            Need immediate help? Contact emergency services or Slydo Mobility support.
           </Text>
           <Pressable style={styles.sosCallRed}>
             <PhoneIcon color="#ffffff" />
@@ -143,7 +143,7 @@ function SosModal({ visible, onClose }: { visible: boolean; onClose: () => void 
           </Pressable>
           <Pressable style={styles.sosCallOutline}>
             <PhoneIcon color="#fc4c02" />
-            <Text style={styles.sosCallOutlineText}>Call Movyra Support</Text>
+            <Text style={styles.sosCallOutlineText}>Call Slydo Support</Text>
           </Pressable>
         </View>
       </View>

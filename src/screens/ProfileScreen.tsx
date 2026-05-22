@@ -4,7 +4,6 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -13,6 +12,7 @@ import { AppBackground } from '../components/AppBackground';
 import { BottomTabs, type TabKey } from '../components/BottomTabs';
 import { ArrowLeftIcon } from '../components/RideIcons';
 import type { Dashboard, User } from '../services/userApi';
+import { useStyles } from '../utils/responsiveStyles';
 
 const DefaultAvatar = require('../assets/images/profile.png');
 const LanguageIcon = require('../assets/images/language.png');
@@ -49,6 +49,7 @@ export function ProfileScreen({
   dashboard?: Dashboard | null;
   activeTab: TabKey;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const displayName = user?.name || 'Profile not set';
   const displayPhone = user?.mobile ? `+91 ${user.mobile}` : 'Mobile number unavailable';
   const displayEmail = user?.email || 'Email not added';
@@ -119,6 +120,7 @@ export function ProfileScreen({
 }
 
 function MenuRow({ item, onPress }: { item: ProfileMenuItem; onPress: () => void }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <Pressable style={styles.menuRow} onPress={onPress}>
       <View style={styles.menuIconWrap}>
@@ -172,7 +174,7 @@ function LogoutIcon({ color }: { color: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -318,4 +320,4 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 8,
   },
-});
+} as const;

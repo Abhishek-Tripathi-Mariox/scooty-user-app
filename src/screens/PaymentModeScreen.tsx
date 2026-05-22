@@ -3,7 +3,6 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -11,42 +10,55 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
 import { ArrowLeftIcon } from '../components/RideIcons';
+import { formatCurrency } from '../utils/format';
+import { useStyles } from '../utils/responsiveStyles';
+
+export type PaymentMethodId = 'CASH' | 'WALLET';
 
 type PayOption = {
-  id: string;
+  id: PaymentMethodId;
   label: string;
-  logoBg: string;
-  logoText: string;
-  logoColor: string;
-  cardNumber?: string;
-  secured?: boolean;
-  note?: string;
+  description: string;
+  iconBg: string;
+  iconColor: string;
+  iconChar: string;
 };
 
-const PRIMARY: PayOption[] = [
-  { id: 'gpay', label: 'Google Pay', logoBg: '#ffffff', logoText: 'G', logoColor: '#4285f4' },
-  { id: 'paytm', label: 'Paytm', logoBg: '#ffffff', logoText: 'P', logoColor: '#00baf2' },
-  { id: 'card', label: '•••• 9999', logoBg: '#ffffff', logoText: 'MC', logoColor: '#eb001b', secured: true },
-];
-
-const UPI: PayOption[] = [
-  { id: 'phonepe', label: 'PhonePe UPI', logoBg: '#5f259f', logoText: 'Ⴗ', logoColor: '#ffffff', note: 'Low success rate currently' },
-  { id: 'mobikwik', label: 'Mobikwik', logoBg: '#e6eefc', logoText: 'M+', logoColor: '#1d4ed8' },
-  { id: 'cred', label: 'CRED pay', logoBg: '#0a0a0a', logoText: 'C', logoColor: '#ffffff' },
+const OPTIONS: PayOption[] = [
+  {
+    id: 'CASH',
+    label: 'Cash on Pickup',
+    description: 'Pay in cash at the pickup station',
+    iconBg: '#dcfce7',
+    iconColor: '#16a34a',
+    iconChar: '₹',
+  },
+  {
+    id: 'WALLET',
+    label: 'Wallet Balance',
+    description: 'Use your in-app wallet balance',
+    iconBg: '#ffedd5',
+    iconColor: '#fc4c02',
+    iconChar: 'W',
+  },
 ];
 
 export function PaymentModeScreen({
   onBack,
   onConfirm,
   amount = 0,
+  walletBalance = 0,
   loading = false,
 }: {
   onBack: () => void;
-  onConfirm: (methodId: string) => void;
+  onConfirm: (methodId: PaymentMethodId) => void;
   amount?: number;
+  walletBalance?: number;
   loading?: boolean;
 }) {
-  const [selected, setSelected] = useState<string>('gpay');
+  const styles = useStyles(RAW_STYLES);
+  const walletEnough = walletBalance >= amount;
+  const [selected, setSelected] = useState<PaymentMethodId>('CASH');
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -56,7 +68,7 @@ export function PaymentModeScreen({
         <Pressable onPress={onBack} style={styles.backButton}>
           <ArrowLeftIcon size={24} color="#1c1c1e" />
         </Pressable>
-        <Text style={styles.headerTitle}>Preferred Mode</Text>
+        <Text style={styles.headerTitle}>Payment Mode</Text>
       </View>
 
       <ScrollView
@@ -64,100 +76,61 @@ export function PaymentModeScreen({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.card}>
-          {PRIMARY.map((opt, i) => (
-            <PayRow
-              key={opt.id}
-              option={opt}
-              amount={amount}
-              selected={selected === opt.id}
-              onSelect={() => setSelected(opt.id)}
-              showDivider={i > 0}
-              showPayButton={selected === opt.id && opt.id === 'gpay'}
-            />
-          ))}
+        <View style={styles.amountCard}>
+          <Text style={styles.amountLabel}>Amount Payable</Text>
+          <Text style={styles.amountValue}>{formatCurrency(amount)}</Text>
         </View>
 
-        <Text style={styles.sectionLabel}>UPI</Text>
+        <Text style={styles.sectionLabel}>Choose how you'd like to pay</Text>
 
         <View style={styles.card}>
-          {UPI.map((opt, i) => (
-            <PayRow
-              key={opt.id}
-              option={opt}
-              amount={amount}
-              selected={selected === opt.id}
-              onSelect={() => setSelected(opt.id)}
-              showDivider={i > 0}
-              subTextNote={opt.note}
-            />
-          ))}
+          {OPTIONS.map((opt, idx) => {
+            const disabled = opt.id === 'WALLET' && !walletEnough;
+            const isSelected = selected === opt.id;
+            return (
+              <View key={opt.id}>
+                {idx > 0 ? <View style={styles.rowDivider} /> : null}
+                <Pressable
+                  style={[styles.row, disabled && styles.rowDisabled]}
+                  onPress={() => !disabled && setSelected(opt.id)}
+                  disabled={disabled}
+                >
+                  <View style={[styles.logo, { backgroundColor: opt.iconBg }]}>
+                    <Text style={[styles.logoText, { color: opt.iconColor }]}>{opt.iconChar}</Text>
+                  </View>
+                  <View style={styles.rowMain}>
+                    <Text style={styles.rowLabel}>{opt.label}</Text>
+                    <Text style={styles.rowNote}>
+                      {opt.id === 'WALLET'
+                        ? `Balance: ${formatCurrency(walletBalance)}${
+                            !walletEnough ? ' — Insufficient' : ''
+                          }`
+                        : opt.description}
+                    </Text>
+                  </View>
+                  <View style={styles.radioWrap}>
+                    {isSelected ? <RadioCheck /> : <RadioEmpty />}
+                  </View>
+                </Pressable>
+              </View>
+            );
+          })}
         </View>
+
+        <Text style={styles.helperText}>
+          You can top up your wallet from Profile {'>'} My Wallet to use the wallet option.
+        </Text>
       </ScrollView>
 
       <View style={styles.footer}>
         <GradientButton
-          label={loading ? 'Processing...' : `Confirm & Pay ₹${amount}`}
+          label={loading ? 'Processing…' : `Confirm — ${formatCurrency(amount)}`}
           onPress={() => onConfirm(selected)}
-          disabled={loading}
+          disabled={loading || (selected === 'WALLET' && !walletEnough)}
           height={56}
         />
       </View>
     </SafeAreaView>
-  );
-}
-
-function PayRow({
-  option,
-  amount,
-  selected,
-  onSelect,
-  showDivider,
-  showPayButton,
-  subTextNote,
-}: {
-  option: PayOption;
-  amount: number;
-  selected: boolean;
-  onSelect: () => void;
-  showDivider: boolean;
-  showPayButton?: boolean;
-  subTextNote?: string;
-}) {
-  return (
-    <View>
-      {showDivider ? <View style={styles.rowDivider} /> : null}
-      <Pressable style={styles.row} onPress={onSelect}>
-        <View style={[styles.logo, { backgroundColor: option.logoBg }]}>
-          <Text style={[styles.logoText, { color: option.logoColor }]}>{option.logoText}</Text>
-        </View>
-
-        <View style={styles.rowMain}>
-          <Text style={styles.rowLabel}>{option.label}</Text>
-          {option.secured ? (
-            <View style={styles.securedChip}>
-              <Text style={styles.securedText}>Secured</Text>
-            </View>
-          ) : null}
-          {subTextNote ? <Text style={styles.rowNote}>{subTextNote}</Text> : null}
-        </View>
-
-        <Text style={styles.amountText}>₹{amount}</Text>
-
-        <View style={styles.radioWrap}>{selected ? <RadioCheck /> : <RadioEmpty />}</View>
-      </Pressable>
-
-      {showPayButton ? (
-        <GradientButton
-          label={`Pay using ${option.label}`}
-          onPress={onSelect}
-          height={47}
-          radius={12}
-          style={styles.payButton}
-          labelStyle={styles.payButtonText}
-        />
-      ) : null}
-    </View>
   );
 }
 
@@ -178,10 +151,10 @@ function RadioEmpty() {
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
-    backgroundColor: '#ffd1b0',
+    backgroundColor: 'transparent',
   },
   header: {
     height: 56,
@@ -215,6 +188,32 @@ const styles = StyleSheet.create({
     paddingBottom: 120,
     gap: 16,
   },
+  amountCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderRadius: 24,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    gap: 4,
+  },
+  amountLabel: {
+    color: '#475569',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  amountValue: {
+    color: '#0f172a',
+    fontSize: 26,
+    fontWeight: '700',
+    lineHeight: 32,
+  },
+  sectionLabel: {
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
   card: {
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
@@ -234,55 +233,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 17,
     gap: 12,
   },
+  rowDisabled: {
+    opacity: 0.5,
+  },
   logo: {
     width: 42,
     height: 42,
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.5)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   logoText: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '800',
   },
   rowMain: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
+    gap: 2,
   },
   rowLabel: {
     color: '#0a0a0a',
-    fontSize: 17,
-    fontWeight: '500',
-    lineHeight: 21,
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 22,
   },
   rowNote: {
-    width: '100%',
-    color: '#0a0a0a',
+    color: '#475569',
     fontSize: 13,
-    fontWeight: '300',
-    lineHeight: 21,
-  },
-  securedChip: {
-    backgroundColor: 'rgba(16, 164, 94, 0.1)',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  securedText: {
-    color: '#10a45e',
-    fontSize: 9,
-    fontWeight: '700',
-    lineHeight: 13,
-  },
-  amountText: {
-    color: '#8f8f8f',
-    fontSize: 15,
-    lineHeight: 21,
+    lineHeight: 18,
   },
   radioWrap: {
     width: 22,
@@ -290,22 +268,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  payButton: {
-    marginTop: 4,
-    marginBottom: 16,
-    marginHorizontal: 78,
-  },
-  payButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-    lineHeight: 21,
-  },
-  sectionLabel: {
-    color: '#000000',
-    fontSize: 17,
-    fontWeight: '500',
-    lineHeight: 22,
+  helperText: {
+    color: '#475569',
+    fontSize: 12,
+    lineHeight: 18,
   },
   footer: {
     position: 'absolute',
@@ -319,4 +285,4 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.62)',
   },
-});
+} as const;

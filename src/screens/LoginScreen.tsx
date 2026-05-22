@@ -3,7 +3,6 @@ import {
   Platform,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -12,6 +11,7 @@ import { AppBackground } from '../components/AppBackground';
 import { BrandHeader } from '../components/BrandHeader';
 import { GradientButton } from '../components/GradientButton';
 import { PhoneIcon } from '../components/PhoneIcon';
+import { useStyles } from '../utils/responsiveStyles';
 
 const MOBILE_LENGTH = 10;
 
@@ -28,6 +28,7 @@ export function LoginScreen({
   onRegisterPress?: () => void;
   loading?: boolean;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const handleChange = (value: string) => {
     onChangeMobile(value.replace(/\D/g, '').slice(0, MOBILE_LENGTH));
   };
@@ -77,7 +78,7 @@ export function LoginScreen({
           </View>
 
           <View style={styles.footerBlock}>
-            <Text style={styles.footerHint}>New to MOVYRA?</Text>
+            <Text style={styles.footerHint}>New to Slydo Mobility?</Text>
             <Text style={styles.footerLink} onPress={onRegisterPress}>
               Register as Rider
             </Text>
@@ -88,23 +89,16 @@ export function LoginScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  safe: {
-    flex: 1,
-    backgroundColor: '#ffd1b0',
-  },
+const RAW_STYLES = {
+  flex: { flex: 1 },
+  safe: { flex: 1, backgroundColor: 'transparent' },
   content: {
     flexGrow: 1,
     alignItems: 'center',
     paddingTop: 63,
     paddingHorizontal: 20,
   },
-  header: {
-    alignItems: 'center',
-  },
+  header: { alignItems: 'center' },
   card: {
     width: '100%',
     maxWidth: 350,
@@ -145,13 +139,8 @@ const styles = StyleSheet.create({
     color: '#1e293b',
     padding: 0,
   },
-  button: {
-    marginTop: 21,
-  },
-  footerBlock: {
-    alignItems: 'center',
-    marginTop: 32,
-  },
+  button: { marginTop: 21 },
+  footerBlock: { alignItems: 'center', marginTop: 32 },
   footerHint: {
     fontSize: 12,
     lineHeight: 16,
@@ -164,4 +153,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     lineHeight: 21,
   },
-});
+} as const;

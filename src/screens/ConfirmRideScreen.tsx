@@ -5,12 +5,12 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
+import { useStyles } from '../utils/responsiveStyles';
 import {
   ArrowLeftIcon,
   CalendarIcon,
@@ -56,6 +56,7 @@ export function ConfirmRideScreen({
   const totalPayable = rideFare + taxes + subtotal + deposit;
   const walletAvailable = 0;
   const scheduleText = scheduleLabel || 'Schedule unavailable';
+  const styles = useStyles(RAW_STYLES);
   const stationLabel = pickupStationName || 'Station unavailable';
   const [insuranceOpen, setInsuranceOpen] = useState(false);
 
@@ -193,6 +194,7 @@ export function ConfirmRideScreen({
 }
 
 function InsuranceSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const styles = useStyles(RAW_STYLES);
   const bullets = [
     'Covers accidental minor damages',
     'Excludes theft',
@@ -231,10 +233,12 @@ function InsuranceSheet({ visible, onClose }: { visible: boolean; onClose: () =>
 }
 
 function Card({ children }: { children: ReactNode }) {
+  const styles = useStyles(RAW_STYLES);
   return <View style={styles.card}>{children}</View>;
 }
 
 function CardTitle({ icon, text, bold }: { icon: ReactNode; text: string; bold?: boolean }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.cardTitleRow}>
       {icon}
@@ -254,6 +258,7 @@ function CostRow({
   boldLabel?: boolean;
   boldValue?: boolean;
 }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.costRow}>
       <Text style={[styles.costLabel, boldLabel && styles.costLabelBold]}>{label}</Text>
@@ -262,7 +267,7 @@ function CostRow({
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -626,4 +631,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 19.5,
   },
-});
+} as const;

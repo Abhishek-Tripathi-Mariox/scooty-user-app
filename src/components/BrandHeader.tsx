@@ -27,10 +27,10 @@ export function BrandHeader({
         style={[
           styles.brand,
           compact ? styles.compactBrand : null,
-          { fontSize: compact ? layout.brandTitleCompactSize : layout.brandTitleSize },
+          { fontSize: compact ? layout.brandTitleCompactSize * 0.82 : layout.brandTitleSize * 0.82 },
         ]}
       >
-        MOVYRA
+        Slydo Mobility
       </Text>
     </View>
   );
