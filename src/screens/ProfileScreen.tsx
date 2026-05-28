@@ -15,13 +15,12 @@ import type { Dashboard, User } from '../services/userApi';
 import { useStyles } from '../utils/responsiveStyles';
 
 const DefaultAvatar = require('../assets/images/profile.png');
-const LanguageIcon = require('../assets/images/language.png');
 const BookingIcon = require('../assets/images/booking.png');
 const RideHistoryIcon = require('../assets/images/ridehistory.png');
 const OfferIcon = require('../assets/images/offer.png');
 const HelpIcon = require('../assets/images/help.png');
 
-type ProfileMenuKey = 'language' | 'bookings' | 'history' | 'offers' | 'support';
+type ProfileMenuKey = 'bookings' | 'history' | 'offers' | 'support';
 
 type ProfileMenuItem = {
   key: ProfileMenuKey;
@@ -55,13 +54,6 @@ export function ProfileScreen({
   const displayEmail = user?.email || 'Email not added';
   const avatarSource = user?.profilePhotoUrl ? { uri: user.profilePhotoUrl } : DefaultAvatar;
 
-  const firstItem: ProfileMenuItem = {
-    key: 'language',
-    title: 'Language',
-    subtitle: user?.settings?.language === 'hi' ? 'Hindi' : 'English',
-    icon: LanguageIcon,
-  };
-
   const menu: ProfileMenuItem[] = [
     { key: 'bookings', title: 'My Bookings', icon: BookingIcon },
     { key: 'history', title: 'Ride History', icon: RideHistoryIcon, iconSize: 40 },
@@ -93,10 +85,6 @@ export function ProfileScreen({
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.menuCard}>
-          <MenuRow item={firstItem} onPress={() => onMenuPress?.(firstItem.key)} />
-        </View>
-
         <View style={styles.menuCard}>
           {menu.map((m, i) => (
             <View key={m.key}>

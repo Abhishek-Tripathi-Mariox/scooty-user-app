@@ -1,4 +1,4 @@
-import { Pressable, SafeAreaView, ScrollView, Text, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, SafeAreaView, ScrollView, Text, View } from 'react-native';
 import { AppBackground } from '../components/AppBackground';
 import { ShareIcon } from '../components/HomeIcons';
 import {
@@ -17,6 +17,8 @@ export function BookingConfirmedScreen({
   pickupStationName,
   timeSlot,
   rideStartsIn,
+  pickupLat,
+  pickupLng,
 }: {
   onBack: () => void;
   onViewDetails: () => void;
@@ -30,7 +32,32 @@ export function BookingConfirmedScreen({
   timeSlot?: string;
   duration?: string;
   rideStartsIn?: string;
+  pickupLat?: number | null;
+  pickupLng?: number | null;
 }) {
+  const openMaps = async () => {
+    if (typeof pickupLat !== 'number' || typeof pickupLng !== 'number') {
+      Alert.alert(
+        'Pickup location unavailable',
+        'GPS coordinates for this pickup station are not set yet.',
+      );
+      return;
+    }
+    const q = `${pickupLat},${pickupLng}`;
+    const url = Platform.select({
+      ios: `maps://maps.apple.com/?q=${q}`,
+      android: `geo:${q}?q=${q}`,
+      default: `https://www.google.com/maps/search/?api=1&query=${q}`,
+    });
+    if (!url) return;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) throw new Error('No maps app');
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Unable to open Maps', 'Please install a maps application or try again.');
+    }
+  };
   const styles = useStyles(RAW_STYLES);
   return (
     <SafeAreaView style={styles.safe}>
@@ -77,9 +104,14 @@ export function BookingConfirmedScreen({
           </View>
         </View>
 
-        <Pressable style={styles.directionsButton} onPress={onStartRide}>
-          <SmallScooterIcon size={20} color="#fc5109" />
+        <Pressable style={styles.directionsButton} onPress={openMaps}>
+          <LocationIcon size={18} color="#fc5109" />
           <Text style={styles.directionsText}>Get Directions</Text>
+        </Pressable>
+
+        <Pressable style={styles.startRideButton} onPress={onStartRide}>
+          <SmallScooterIcon size={20} color="#ffffff" />
+          <Text style={styles.startRideText}>Start Ride</Text>
         </Pressable>
 
         <View style={styles.secondaryRow}>
@@ -247,6 +279,28 @@ const RAW_STYLES = {
     color: '#fc5109',
     fontSize: 16,
     fontWeight: '500',
+    lineHeight: 28,
+  },
+  startRideButton: {
+    marginTop: 12,
+    width: '100%',
+    height: 56,
+    borderRadius: 36,
+    backgroundColor: '#fc5109',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    shadowColor: '#fc4c02',
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  startRideText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '700',
     lineHeight: 28,
   },
   secondaryRow: {

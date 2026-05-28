@@ -13,26 +13,38 @@ import { AppBackground } from '../components/AppBackground';
 import { BottomTabs, type TabKey } from '../components/BottomTabs';
 import { GradientButton } from '../components/GradientButton';
 import { ArrowLeftIcon } from '../components/RideIcons';
-
-const FAQS = [
-  { q: 'How do I unlock a scooter?', a: 'Scan the QR code on the scooter using the app to unlock it instantly.' },
-  { q: 'What if the scooter has low battery?', a: 'Pick a scooter with higher battery — the app shows live battery levels at every station.' },
-  { q: 'How is the fare calculated?', a: 'Fare is based on per-minute + per-kilometer rates plus applicable taxes.' },
-  { q: 'Can I pause my ride?', a: 'Yes, you can pause your ride from the active ride screen. Pause minutes are billed at a reduced rate.' },
-  { q: 'What is the service area?', a: 'Service is currently available within the city limits shown on the map.' },
-];
+import type { SupportFaq } from '../services/userApi';
 
 export function HelpSupportScreen({
   onBack,
   onTabPress,
   activeTab,
+  faqs = [],
+  onSubmitIssue,
+  loading = false,
 }: {
   onBack: () => void;
   onTabPress: (tab: TabKey) => void;
   activeTab: TabKey;
+  faqs?: SupportFaq[];
+  onSubmitIssue?: (message: string) => Promise<void> | void;
+  loading?: boolean;
 }) {
   const [issue, setIssue] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
+
+  const handleSubmit = async () => {
+    const text = issue.trim();
+    if (!text || !onSubmitIssue) return;
+    try {
+      setSubmitting(true);
+      await onSubmitIssue(text);
+      setIssue('');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -62,26 +74,47 @@ export function HelpSupportScreen({
               onChangeText={setIssue}
               placeholder="Describe your issue..."
               placeholderTextColor="rgba(0, 0, 0, 0.45)"
+              selectionColor="#fc4c02"
+              cursorColor="#fc4c02"
             />
           </View>
-          <GradientButton label="Submit Issue" onPress={() => setIssue('')} height={37} radius={12} />
+          <GradientButton
+            label={submitting ? 'Submitting…' : 'Submit Issue'}
+            onPress={handleSubmit}
+            disabled={submitting || issue.trim().length === 0}
+            height={37}
+            radius={12}
+          />
         </View>
 
         <Text style={styles.faqTitle}>Frequently Asked Questions</Text>
-        <View style={{ gap: 8 }}>
-          {FAQS.map((f, i) => {
-            const open = openIndex === i;
-            return (
-              <View key={f.q} style={styles.faqCard}>
-                <Pressable style={styles.faqRow} onPress={() => setOpenIndex(open ? null : i)}>
-                  <Text style={styles.faqQuestion}>{f.q}</Text>
-                  <ChevronDownIcon color="#6b7280" rotated={open} />
-                </Pressable>
-                {open ? <Text style={styles.faqAnswer}>{f.a}</Text> : null}
-              </View>
-            );
-          })}
-        </View>
+        {loading && faqs.length === 0 ? (
+          <Text style={styles.faqLoading}>Loading FAQs…</Text>
+        ) : faqs.length === 0 ? (
+          <View style={styles.faqCard}>
+            <Text style={styles.faqQuestion}>No FAQs available yet.</Text>
+          </View>
+        ) : (
+          <View style={{ gap: 8 }}>
+            {faqs.map((f, i) => {
+              const open = openIndex === i;
+              const question = f.question || 'Question';
+              const answer = f.answer || '';
+              return (
+                <View key={f.id || question} style={styles.faqCard}>
+                  <Pressable
+                    style={styles.faqRow}
+                    onPress={() => setOpenIndex(open ? null : i)}
+                  >
+                    <Text style={styles.faqQuestion}>{question}</Text>
+                    <ChevronDownIcon color="#6b7280" rotated={open} />
+                  </Pressable>
+                  {open && answer ? <Text style={styles.faqAnswer}>{answer}</Text> : null}
+                </View>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
 
       <BottomTabs active={activeTab} onTabPress={onTabPress} />
@@ -273,5 +306,11 @@ const styles = StyleSheet.create({
     color: '#4a5565',
     fontSize: 14,
     lineHeight: 20,
+  },
+  faqLoading: {
+    color: '#64748b',
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: 12,
   },
 });

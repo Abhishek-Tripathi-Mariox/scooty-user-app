@@ -88,6 +88,7 @@ function FloatingField({
   editable = true,
   autoCapitalize,
   chipColor,
+  error,
 }: {
   label: string;
   value: string;
@@ -97,6 +98,7 @@ function FloatingField({
   editable?: boolean;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   chipColor?: string;
+  error?: string | null;
 }) {
   return (
     <View style={styles.field}>
@@ -111,8 +113,11 @@ function FloatingField({
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         editable={editable}
-        style={styles.input}
+        selectionColor="#fc4c02"
+        cursorColor="#fc4c02"
+        style={[styles.input, error ? { borderColor: '#ef4444' } : null]}
       />
+      {error ? <Text style={styles.fieldError}>{error}</Text> : null}
     </View>
   );
 }
@@ -221,9 +226,17 @@ export function UpdateProfileScreen({
             <FloatingField
               label="Full Name"
               value={form.name}
-              onChangeText={(v) => setForm((c) => ({ ...c, name: v }))}
+              onChangeText={(v) =>
+                setForm((c) => ({ ...c, name: v.replace(/[^a-zA-Z\s.'-]/g, '') }))
+              }
               placeholder="Enter full name"
+              autoCapitalize="words"
               chipColor="#ffebe1"
+              error={
+                form.name.length > 0 && form.name.trim().length < 2
+                  ? 'Name must be at least 2 characters'
+                  : null
+              }
             />
 
             <FloatingField
@@ -234,6 +247,12 @@ export function UpdateProfileScreen({
               keyboardType="email-address"
               autoCapitalize="none"
               chipColor="#ffe5dd"
+              error={
+                form.email.length > 0 &&
+                !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())
+                  ? 'Enter a valid email address'
+                  : null
+              }
             />
 
             <View style={styles.field}>
@@ -408,6 +427,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     color: '#1b1d21',
     fontSize: 14,
+  },
+  fieldError: {
+    marginTop: 6,
+    marginLeft: 4,
+    color: '#ef4444',
+    fontSize: 12,
+    fontWeight: '500',
   },
   phoneRow: {
     flexDirection: 'row',

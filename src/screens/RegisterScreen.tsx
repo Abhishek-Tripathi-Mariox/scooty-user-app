@@ -80,8 +80,10 @@ export function RegisterScreen({
             <LabeledInput
               label="Full Name"
               value={fullName}
-              onChangeText={onChangeFullName}
+              onChangeText={(v) => onChangeFullName(v.replace(/[^a-zA-Z\s.'-]/g, ''))}
               placeholder="Enter your full name"
+              keyboardType="default"
+              autoCapitalize="words"
             />
             <LabeledInput
               label="Email Address"
@@ -101,8 +103,10 @@ export function RegisterScreen({
             <LabeledInput
               label="City"
               value={city}
-              onChangeText={onChangeCity}
+              onChangeText={(v) => onChangeCity(v.replace(/[^a-zA-Z\s.'-]/g, ''))}
               placeholder="City"
+              keyboardType="default"
+              autoCapitalize="words"
             />
 
             <Pressable style={styles.termsRow} onPress={onToggleTerms}>
@@ -162,10 +166,12 @@ function LabeledInput({
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor="#64748b"
+        placeholderTextColor="#94a3b8"
         editable={editable}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
+        selectionColor="#fc4c02"
+        cursorColor="#fc4c02"
         style={styles.input}
       />
     </View>

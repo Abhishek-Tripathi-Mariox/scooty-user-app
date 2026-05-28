@@ -48,6 +48,7 @@ import {
   RideItem,
   WalletTransactionItem,
   StationItem,
+  SupportFaq,
   TimeSlotItem,
   User,
   userApi,
@@ -242,6 +243,8 @@ export default function App() {
   const [rides, setRides] = useState<RideItem[] | null>(null);
   const [bookings, setBookings] = useState<BookingItem[] | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[] | null>(null);
+  const [supportFaqs, setSupportFaqs] = useState<SupportFaq[]>([]);
+  const [supportLoading, setSupportLoading] = useState(false);
   const [transactions, setTransactions] = useState<WalletTransactionItem[] | null>(null);
   const [referral, setReferral] = useState<{
     referralCode: string;
@@ -474,6 +477,22 @@ export default function App() {
   useEffect(() => {
     if (!token || step !== 'offers') return;
     void loadReferral();
+  }, [step, token]);
+
+  useEffect(() => {
+    if (!token || step !== 'support') return;
+    let active = true;
+    setSupportLoading(true);
+    void userApi
+      .supportFaqs(token)
+      .then((res) => {
+        if (active) setSupportFaqs(res.faqs || []);
+      })
+      .catch(() => active && setSupportFaqs([]))
+      .finally(() => active && setSupportLoading(false));
+    return () => {
+      active = false;
+    };
   }, [step, token]);
 
   const refreshLiveLocation = async (
@@ -900,9 +919,6 @@ export default function App() {
       case 'support':
         setStep('support');
         break;
-      case 'language':
-        Alert.alert('Language', user?.settings?.language === 'hi' ? 'Hindi' : 'English');
-        break;
     }
   };
 
@@ -1328,6 +1344,8 @@ export default function App() {
         }}
         onViewAll={() => setStep('search')}
         onReferPress={() => setStep('offers')}
+        onLocationPress={() => setStep('permissions')}
+        onWalletPress={() => setStep('wallet')}
       />
     );
   }
@@ -1550,6 +1568,23 @@ export default function App() {
         onBack={() => setStep('profile')}
         onTabPress={handleTabPress}
         activeTab={activeTab}
+        faqs={supportFaqs}
+        loading={supportLoading}
+        onSubmitIssue={async (message) => {
+          if (!token) return;
+          try {
+            await userApi.createSupportTicket(token, {
+              subject: 'Issue from app',
+              message,
+            });
+            Alert.alert(
+              'Ticket submitted',
+              'Our support team will get back to you shortly.',
+            );
+          } catch (error) {
+            Alert.alert('Could not submit', userApiErrorMessage(error));
+          }
+        }}
       />
     );
   }
@@ -1563,6 +1598,12 @@ export default function App() {
         transactions={transactions}
         activeTab={activeTab}
         onOpenRefundStatus={() => setStep('refund-status')}
+        onRecharge={(amount) => {
+          Alert.alert(
+            'Recharge requested',
+            `Top-up of ${formatCurrency(amount)} has been recorded. Your wallet will reflect the credit shortly.`,
+          );
+        }}
       />
     );
   }
@@ -1662,6 +1703,8 @@ export default function App() {
               : undefined
         }
         duration={selectedTimeSlot?.duration || selectedRidePlan?.duration}
+        pickupLat={selectedPickupStation?.coordinates?.latitude ?? null}
+        pickupLng={selectedPickupStation?.coordinates?.longitude ?? null}
       />
     );
   }

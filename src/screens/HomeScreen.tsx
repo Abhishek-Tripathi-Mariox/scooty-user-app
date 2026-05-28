@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
-  FlatList,
+  Animated,
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -39,6 +39,8 @@ export function HomeScreen({
   onBookScooty,
   onViewAll,
   onReferPress,
+  onLocationPress,
+  onWalletPress,
 }: {
   user?: User | null;
   dashboard?: Dashboard | null;
@@ -49,21 +51,29 @@ export function HomeScreen({
   onBookScooty: (stationId?: string) => void;
   onViewAll?: () => void;
   onReferPress?: () => void;
+  onLocationPress?: () => void;
+  onWalletPress?: () => void;
 }) {
   const layout = useResponsiveLayout();
   const city = user?.settings?.location?.city || user?.city || 'Kuala lumpur, Malaysia';
   const nearbyStations = (stations ?? []).slice(0, 5);
 
-  const carouselGap = 12;
-  const cardWidth = Math.min(220, Math.round(layout.screenWidth * 0.58));
+  const carouselGap = 16;
+  const cardWidth = Math.min(230, Math.round(layout.screenWidth * 0.62));
   const sideInset = Math.max(20, Math.round((layout.screenWidth - cardWidth) / 2));
+  const snapStep = cardWidth + carouselGap;
 
+  const scrollX = useRef(new Animated.Value(0)).current;
   const [activeIndex, setActiveIndex] = useState(0);
   const handleMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offset = e.nativeEvent.contentOffset.x;
-    const next = Math.max(0, Math.round(offset / (cardWidth + carouselGap)));
+    const next = Math.max(0, Math.round(offset / snapStep));
     setActiveIndex(next);
   };
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+    { useNativeDriver: true },
+  );
 
   const mapHeight = MAP_HEIGHT + STATUS_BAR_PAD;
 
@@ -79,7 +89,11 @@ export function HomeScreen({
             style={[styles.headerRow, { paddingTop: STATUS_BAR_PAD + 12 }]}
             pointerEvents="box-none"
           >
-            <View style={styles.locationWrap}>
+            <Pressable
+              style={styles.locationWrap}
+              onPress={onLocationPress}
+              hitSlop={6}
+            >
               <MapPinIcon size={20} />
               <View style={{ marginLeft: 8 }}>
                 <Text style={styles.locationLabel}>Your location</Text>
@@ -87,14 +101,14 @@ export function HomeScreen({
                   {city}
                 </Text>
               </View>
-            </View>
+            </Pressable>
 
-            <View style={styles.walletPill}>
+            <Pressable style={styles.walletPill} onPress={onWalletPress} hitSlop={6}>
               <WalletIcon size={20} />
               <Text style={styles.walletText}>
                 {dashboard ? formatCurrency(dashboard.walletBalance) : '₹0'}
               </Text>
-            </View>
+            </Pressable>
           </View>
         </View>
 
@@ -118,7 +132,7 @@ export function HomeScreen({
           <View style={[styles.sectionRow, { paddingHorizontal: layout.screenX }]}>
             <Text style={styles.sectionTitle}>Nearest Available Scooty</Text>
             <Pressable onPress={onViewAll} hitSlop={8}>
-              <Text style={styles.viewAll}>view all</Text>
+              <Text style={styles.viewAll}>View all</Text>
             </Pressable>
           </View>
 
@@ -128,24 +142,47 @@ export function HomeScreen({
               <Text style={styles.emptyStateText}>Fetching the latest scooty availability.</Text>
             </View>
           ) : nearbyStations.length > 0 ? (
-            <FlatList
+            <Animated.FlatList
               data={nearbyStations}
               keyExtractor={(item) => item.id}
               horizontal
               showsHorizontalScrollIndicator={false}
-              snapToInterval={cardWidth + carouselGap}
-              decelerationRate="fast"
+              snapToInterval={snapStep}
+              snapToAlignment="start"
+              decelerationRate={0.92}
+              disableIntervalMomentum
+              scrollEventThrottle={16}
+              onScroll={handleScroll}
               contentContainerStyle={{ paddingHorizontal: sideInset, paddingVertical: 4 }}
               ItemSeparatorComponent={() => <View style={{ width: carouselGap }} />}
               onMomentumScrollEnd={handleMomentumEnd}
-              renderItem={({ item, index }) => (
-                <StationCard
-                  station={item}
-                  width={cardWidth}
-                  active={index === activeIndex}
-                  onPress={() => onBookScooty(item.id)}
-                />
-              )}
+              renderItem={({ item, index }) => {
+                const inputRange = [
+                  (index - 1) * snapStep,
+                  index * snapStep,
+                  (index + 1) * snapStep,
+                ];
+                const scale = scrollX.interpolate({
+                  inputRange,
+                  outputRange: [0.88, 1, 0.88],
+                  extrapolate: 'clamp',
+                });
+                const opacity = scrollX.interpolate({
+                  inputRange,
+                  outputRange: [0.55, 1, 0.55],
+                  extrapolate: 'clamp',
+                });
+                return (
+                  <Animated.View style={{ transform: [{ scale }], opacity }}>
+                    <StationCard
+                      station={item}
+                      width={cardWidth}
+                      active={index === activeIndex}
+                      onPress={() => onBookScooty(item.id)}
+                    />
+                  </Animated.View>
+                );
+              }}
             />
           ) : (
             <View style={[styles.emptyStateCard, { width: cardWidth, marginHorizontal: sideInset }]}>
@@ -219,9 +256,9 @@ function StationCard({
   active: boolean;
   onPress: () => void;
 }) {
-  const artSize = active ? 118 : 82;
-  const overlap = active ? 70 : 46;
-  const subtitle = active ? null : `M${station.id.toString().slice(-4).padStart(4, '0').toUpperCase()}`;
+  void active;
+  const artSize = 118;
+  const overlap = 70;
 
   return (
     <Pressable
@@ -238,11 +275,8 @@ function StationCard({
           { width: '100%', paddingTop: artSize - overlap + 8 },
         ]}
       >
-        <Text
-          style={[styles.stationName, { fontSize: active ? 18 : 13 }]}
-          numberOfLines={1}
-        >
-          {subtitle ? `${station.name}  |  ${subtitle}` : station.name}
+        <Text style={styles.stationName} numberOfLines={1}>
+          {station.name}
         </Text>
         <View style={styles.statsRow}>
           <StatPill icon={<BatteryIcon size={14} color="#16a34a" />} label={station.battery} />
@@ -409,7 +443,8 @@ const styles = StyleSheet.create({
   },
   stationName: {
     color: '#363636',
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     textAlign: 'center',
     marginBottom: 10,
   },

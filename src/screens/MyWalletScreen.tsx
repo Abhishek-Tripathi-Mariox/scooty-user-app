@@ -43,6 +43,7 @@ export function MyWalletScreen({
   transactions,
   activeTab,
   onOpenRefundStatus,
+  onRecharge,
 }: {
   onBack: () => void;
   onTabPress: (tab: TabKey) => void;
@@ -50,6 +51,7 @@ export function MyWalletScreen({
   transactions?: WalletTransactionItem[] | null;
   activeTab?: TabKey;
   onOpenRefundStatus?: () => void;
+  onRecharge?: (amount: number) => void;
 }) {
   const [rechargeOpen, setRechargeOpen] = useState(false);
   const list = useMemo(() => {
@@ -150,17 +152,36 @@ export function MyWalletScreen({
 
       {activeTab ? <BottomTabs active={activeTab} onTabPress={onTabPress} /> : null}
 
-      <RechargeModal visible={rechargeOpen} onClose={() => setRechargeOpen(false)} />
+      <RechargeModal
+        visible={rechargeOpen}
+        onClose={() => setRechargeOpen(false)}
+        onRecharge={onRecharge}
+      />
     </SafeAreaView>
   );
 }
 
-function RechargeModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function RechargeModal({
+  visible,
+  onClose,
+  onRecharge,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onRecharge?: (amount: number) => void;
+}) {
   const [selected, setSelected] = useState(500);
   const preset = RECHARGE_PRESETS.find((p) => p.amount === selected) || RECHARGE_PRESETS[4];
   const gst = Math.round(selected * 0.18);
   const total = selected + gst;
   const extraPercent = Math.round((preset.extra / preset.amount) * 100);
+
+  const handlePay = () => {
+    onClose();
+    if (onRecharge) {
+      onRecharge(total);
+    }
+  };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -214,7 +235,7 @@ function RechargeModal({ visible, onClose }: { visible: boolean; onClose: () => 
           </View>
 
           <View style={{ marginTop: 16 }}>
-            <GradientButton label="Pay Now" onPress={onClose} height={45} radius={12} />
+            <GradientButton label="Pay Now" onPress={handlePay} height={45} radius={12} />
           </View>
         </ScrollView>
       </View>
