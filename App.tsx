@@ -334,7 +334,7 @@ export default function App() {
 
     const timer = setTimeout(() => {
       setStep('login');
-    }, 3800);
+    }, 5800);
 
     return () => clearTimeout(timer);
   }, [isBootstrapping, step]);
