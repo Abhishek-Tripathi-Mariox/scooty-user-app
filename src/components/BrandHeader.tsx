@@ -1,30 +1,21 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { useResponsiveLayout } from '../utils/responsive';
 
-const ScootyLogo = require('../assets/images/scootylogo.png');
+const ScootyLogo = require('../assets/splash/slydo-logo-upright.png');
 
 export function BrandHeader({
   compact = false,
 }: {
   compact?: boolean;
 }) {
-  const layout = useResponsiveLayout();
-  const baseWidth = compact ? layout.brandLogoWidth * 0.85 : layout.brandLogoWidth;
-  const baseHeight = compact ? layout.brandLogoHeight * 0.85 : layout.brandLogoHeight;
+  const size = compact ? 72 : 96;
   return (
-    <View style={[styles.wrap, compact && styles.compactWrap]}>
+    <View style={styles.wrap}>
       <Image
         source={ScootyLogo}
-        style={{ width: baseWidth, height: baseHeight }}
+        style={{ width: size, height: size }}
         resizeMode="contain"
       />
-      <Text
-        style={[
-          styles.brand,
-          compact ? styles.compactBrand : null,
-          { fontSize: compact ? layout.brandTitleCompactSize * 0.82 : layout.brandTitleSize * 0.82 },
-        ]}
-      >
+      <Text style={[styles.brand, compact && styles.compactBrand]} numberOfLines={1}>
         Slydo Mobility
       </Text>
     </View>
@@ -36,16 +27,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  compactWrap: {
-    marginBottom: 10,
-  },
   brand: {
-    marginTop: 8,
+    marginTop: 12,
     color: '#151515',
+    fontSize: 26,
     fontWeight: '900',
     letterSpacing: 0.4,
   },
   compactBrand: {
-    marginTop: 4,
+    marginTop: 8,
+    fontSize: 22,
   },
 });

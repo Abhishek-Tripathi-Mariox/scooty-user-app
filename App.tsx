@@ -329,15 +329,6 @@ export default function App() {
   };
 
   // Effects
-  useEffect(() => {
-    if (step !== 'splash' || isBootstrapping) return;
-
-    const timer = setTimeout(() => {
-      setStep('login');
-    }, 5800);
-
-    return () => clearTimeout(timer);
-  }, [isBootstrapping, step]);
 
   useEffect(() => {
     let active = true;
@@ -1228,7 +1219,7 @@ export default function App() {
 
   // Render
   if (step === 'splash') {
-    return <SplashScreen />;
+    return <SplashScreen onGetStarted={() => setStep('login')} />;
   }
 
   if (step === 'login') {
