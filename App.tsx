@@ -35,6 +35,7 @@ import { BookingReceiptScreen } from './src/screens/BookingReceiptScreen';
 import { PreRideScreen } from './src/screens/PreRideScreen';
 import { RideCancelScreen } from './src/screens/RideCancelScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
+import { CityPickerScreen } from './src/screens/CityPickerScreen';
 import { AuthStep, OTP_LENGTH } from './src/constants/auth';
 import type { TabKey } from './src/components/BottomTabs';
 import {
@@ -59,6 +60,7 @@ import { formatCurrency } from './src/utils/format';
 
 type AppStep =
   | 'splash'
+  | 'city-picker'
   | AuthStep
   | 'register'
   | 'kyc'
@@ -271,10 +273,21 @@ export default function App() {
 
   // UI state
   const [activeTab, setActiveTab] = useState<TabKey>('home');
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+
+  const visibleStations = useMemo(() => {
+    if (!stations) return null;
+    if (!selectedCity) return stations;
+    const cityFilter = selectedCity.split(',')[0].trim().toLowerCase();
+    return stations.filter((s) => (s.city || '').toLowerCase().includes(cityFilter));
+  }, [stations, selectedCity]);
 
   const pickupStations = useMemo(
-    () => stations?.map((station, index) => mapStationToPickupStation(station, String(index + 1))) ?? null,
-    [stations],
+    () =>
+      visibleStations?.map((station, index) =>
+        mapStationToPickupStation(station, String(index + 1)),
+      ) ?? null,
+    [visibleStations],
   );
 
   const persistAuthToken = async (value: string) => {
@@ -983,7 +996,9 @@ export default function App() {
 
   const buildBookingDate = (selection: string) => resolveBookingDate(selection);
 
-  const handleConfirmBooking = async (paymentMethodId: 'CASH' | 'WALLET' = 'CASH') => {
+  const handleConfirmBooking = async (
+    paymentMethodId: 'CASH' | 'WALLET' | 'UPI' | 'NETBANKING' = 'CASH',
+  ) => {
     if (!token || !selectedRidePlan || !selectedPickupStation || !selectedDropStation || !selectedTimeSlot) {
       Alert.alert('Missing details', 'Please choose a plan, time slot, pickup station, and drop station before continuing.');
       return;
@@ -1316,10 +1331,44 @@ export default function App() {
     );
   }
 
+  if (step === 'city-picker') {
+    const currentCity =
+      selectedCity || user?.settings?.location?.city || user?.city || undefined;
+    return (
+      <CityPickerScreen
+        onBack={() => setStep('dashboard')}
+        currentCity={currentCity}
+        onSelect={(city) => {
+          setSelectedCity(city);
+          setStep('dashboard');
+          if (token) {
+            const cityName = city.split(',')[0].trim();
+            setLoading(true);
+            userApi
+              .stations(token, { city: cityName })
+              .then((result) => setStations(result.stations || []))
+              .catch((err) => console.warn('Failed to load stations for city:', err))
+              .finally(() => setLoading(false));
+          }
+        }}
+      />
+    );
+  }
+
   if (step === 'dashboard') {
+    const homeUser = selectedCity && user
+      ? ({
+          ...user,
+          city: selectedCity,
+          settings: {
+            ...(user.settings || {}),
+            location: { ...(user.settings?.location || {}), city: selectedCity },
+          },
+        } as typeof user)
+      : user;
     return (
       <HomeScreen
-        user={user}
+        user={homeUser}
         dashboard={dashboard}
         stations={pickupStations}
         loading={loading}
@@ -1335,7 +1384,7 @@ export default function App() {
         }}
         onViewAll={() => setStep('search')}
         onReferPress={() => setStep('offers')}
-        onLocationPress={() => setStep('permissions')}
+        onLocationPress={() => setStep('city-picker')}
         onWalletPress={() => setStep('wallet')}
       />
     );
@@ -1345,7 +1394,7 @@ export default function App() {
     return (
       <SearchScreen
         onBack={() => setStep('dashboard')}
-        stations={stations}
+        stations={visibleStations}
         loading={loading}
         selectedStationId={selectedSearchStationId}
         onSelectStation={(station) => {
