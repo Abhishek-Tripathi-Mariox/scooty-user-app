@@ -13,6 +13,7 @@ export function BookingConfirmedScreen({
   onViewDetails,
   onBackHome,
   onStartRide,
+  canStartRide = true,
   bookingId,
   pickupStationName,
   timeSlot,
@@ -24,6 +25,7 @@ export function BookingConfirmedScreen({
   onViewDetails: () => void;
   onBackHome: () => void;
   onStartRide?: () => void;
+  canStartRide?: boolean;
   bookingId?: string;
   planType?: string;
   amount?: number;
@@ -109,9 +111,15 @@ export function BookingConfirmedScreen({
           <Text style={styles.directionsText}>Get Directions</Text>
         </Pressable>
 
-        <Pressable style={styles.startRideButton} onPress={onStartRide}>
+        <Pressable
+          style={[styles.startRideButton, !canStartRide && styles.startRideButtonDisabled]}
+          onPress={canStartRide ? onStartRide : undefined}
+          disabled={!canStartRide}
+        >
           <SmallScooterIcon size={20} color="#ffffff" />
-          <Text style={styles.startRideText}>Start Ride</Text>
+          <Text style={styles.startRideText}>
+            {canStartRide ? 'Start Ride' : 'Starts at Scheduled Time'}
+          </Text>
         </Pressable>
 
         <View style={styles.secondaryRow}>
@@ -296,6 +304,9 @@ const RAW_STYLES = {
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
+  },
+  startRideButtonDisabled: {
+    opacity: 0.55,
   },
   startRideText: {
     color: '#ffffff',

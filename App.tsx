@@ -109,6 +109,36 @@ const mapRidePlanIdToPlanCode = (id?: RidePlanId | null) => {
   return 'HOURLY';
 };
 
+const canStartScheduledRide = (booking?: BookingItem | null) => {
+  const scheduledStartAt = booking?.startAt || booking?.schedule?.startAt;
+  if (!scheduledStartAt) return true;
+
+  const startMs = new Date(scheduledStartAt).getTime();
+  if (Number.isNaN(startMs)) return true;
+
+  return Date.now() >= startMs;
+};
+
+const normalizeBookingResponse = (booking?: BookingItem | null): BookingItem | null => {
+  if (!booking) return booking ?? null;
+
+  return {
+    ...booking,
+    pickupStation: booking.pickupStation || booking.pickupStationId,
+    dropStation: booking.dropStation || booking.dropStationId,
+    scooter:
+      booking.scooter ||
+      (booking.vehicleId
+        ? {
+            id: booking.vehicleId._id,
+            modelName: booking.vehicleId.modelName,
+            registrationNumber: booking.vehicleId.registrationNumber,
+            imageUrl: booking.vehicleId.photos?.sideUrl || booking.vehicleId.photos?.frontUrl,
+          }
+        : undefined),
+  };
+};
+
 const AUTH_TOKEN_KEY = 'scooty_rental_user_auth_token';
 const UserAuthStorage = NativeModules.UserAuthStorage as
   | {
@@ -1052,7 +1082,8 @@ export default function App() {
         paymentReferenceId: `${paymentMethod}-${Date.now()}`,
         autoConfirm: true,
       });
-      setCreatedBooking(bookingResult.booking);
+      const normalizedBooking = normalizeBookingResponse(bookingResult.booking);
+      setCreatedBooking(normalizedBooking);
 
       const [profileResult, ridesResult, dashboardResult, notificationsResult, transactionsResult] = await Promise.all([
         userApi.profile(token),
@@ -1067,22 +1098,22 @@ export default function App() {
       setNotifications(notificationsResult.notifications);
       setTransactions(transactionsResult.transactions || []);
       setSelectedRide({
-        _id: bookingResult.booking._id,
+        _id: normalizedBooking?._id || bookingResult.booking._id,
         status: 'ongoing',
-        planCode: bookingResult.booking.planCode,
-        planName: bookingResult.booking.planName,
-        date: bookingResult.booking.date,
-        startAt: bookingResult.booking.startAt,
-        endAt: bookingResult.booking.endAt,
-        durationHours: bookingResult.booking.durationHours,
-        pricing: bookingResult.booking.pricing,
-        payment: bookingResult.booking.payment,
-        pickupStation: bookingResult.booking.pickupStation,
-        dropStation: bookingResult.booking.dropStation,
-        scooter: bookingResult.booking.scooter,
-        schedule: bookingResult.booking.schedule,
+        planCode: normalizedBooking?.planCode || bookingResult.booking.planCode,
+        planName: normalizedBooking?.planName || bookingResult.booking.planName,
+        date: normalizedBooking?.date || bookingResult.booking.date,
+        startAt: normalizedBooking?.startAt || bookingResult.booking.startAt,
+        endAt: normalizedBooking?.endAt || bookingResult.booking.endAt,
+        durationHours: normalizedBooking?.durationHours || bookingResult.booking.durationHours,
+        pricing: normalizedBooking?.pricing || bookingResult.booking.pricing,
+        payment: normalizedBooking?.payment || bookingResult.booking.payment,
+        pickupStation: normalizedBooking?.pickupStation || bookingResult.booking.pickupStation,
+        dropStation: normalizedBooking?.dropStation || bookingResult.booking.dropStation,
+        scooter: normalizedBooking?.scooter || bookingResult.booking.scooter,
+        schedule: normalizedBooking?.schedule || bookingResult.booking.schedule,
         distance: 0,
-        fare: bookingResult.booking.pricing?.totalPayable,
+        fare: normalizedBooking?.pricing?.totalPayable || bookingResult.booking.pricing?.totalPayable,
       });
 
       setStep('booking-confirmed');
@@ -1094,23 +1125,32 @@ export default function App() {
   };
 
   const handleStartRide = async () => {
-    const bookingId = createdBooking?._id || selectedRide?._id;
+    const currentBooking = createdBooking || selectedRide;
+    const bookingId = currentBooking?._id;
     if (!token || !bookingId) {
       Alert.alert('Cannot start ride', 'Booking is not ready yet. Please try again.');
+      return;
+    }
+    if (!canStartScheduledRide(currentBooking)) {
+      Alert.alert(
+        'Ride not started yet',
+        'This booking is scheduled for a future time. You can start it only when the booked time begins.',
+      );
       return;
     }
     try {
       setBookingBusy(true);
       const result = await userApi.startRide(token, bookingId, {
-        unlockCode: createdBooking?.unlockCode || selectedRide?.unlockCode,
+        unlockCode: currentBooking?.unlockCode,
       });
-      setCreatedBooking(result.booking);
+      const normalizedBooking = normalizeBookingResponse(result.booking) || result.booking;
+      setCreatedBooking(normalizedBooking);
       setSelectedRide({
-        ...result.booking,
+        ...normalizedBooking,
         status: 'ongoing',
-        unlockCode: result.booking.unlockCode,
+        unlockCode: normalizedBooking.unlockCode,
         distance: 0,
-        fare: result.booking.pricing?.totalPayable,
+        fare: normalizedBooking.pricing?.totalPayable,
       });
       setStep('ride-progress');
     } catch (error) {
@@ -1721,23 +1761,25 @@ export default function App() {
   }
 
   if (step === 'booking-confirmed') {
+    const currentBooking = createdBooking || selectedRide;
     return (
       <BookingConfirmedScreen
         onBack={() => setStep('confirm-ride')}
         onStartRide={handleStartRide}
+        canStartRide={canStartScheduledRide(currentBooking)}
         onViewDetails={() => setStep('bookings')}
         onBackHome={() => {
           setActiveTab('home');
           setStep('dashboard');
         }}
-        bookingId={createdBooking?._id || 'Unavailable'}
-        planType={createdBooking?.planName || selectedRidePlan?.title || 'Plan unavailable'}
-        amount={createdBooking?.pricing?.totalPayable || bookingQuote?.pricing?.totalPayable || selectedRidePlan?.price}
-        pickupStationName={createdBooking?.pickupStation?.name || selectedPickupStation?.name}
-        dropStationName={createdBooking?.dropStation?.name || selectedRide?.dropStation?.name}
+        bookingId={currentBooking?._id || 'Unavailable'}
+        planType={currentBooking?.planName || selectedRidePlan?.title || 'Plan unavailable'}
+        amount={currentBooking?.pricing?.totalPayable || bookingQuote?.pricing?.totalPayable || selectedRidePlan?.price}
+        pickupStationName={currentBooking?.pickupStation?.name || selectedPickupStation?.name}
+        dropStationName={currentBooking?.dropStation?.name || selectedRide?.dropStation?.name}
         timeSlot={
-          createdBooking?.schedule?.startLabel && createdBooking?.schedule?.endLabel
-            ? `${createdBooking.schedule.startLabel} - ${createdBooking.schedule.endLabel}`
+          currentBooking?.schedule?.startLabel && currentBooking?.schedule?.endLabel
+            ? `${currentBooking.schedule.startLabel} - ${currentBooking.schedule.endLabel}`
             : selectedTimeSlot
               ? `${selectedTimeSlot.time} - ${selectedTimeSlot.time}`
               : undefined
