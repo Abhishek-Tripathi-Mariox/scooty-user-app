@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, ViewStyle } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { LIVE_PIN_ICON, STATION_ICON } from '../assets/mapIcons';
 import { fetchCoordsIfAllowed, type Coords } from '../utils/location';
 
 export type MapStation = {
@@ -20,6 +21,9 @@ export type LiveMapProps<T extends MapStation = MapStation> = {
   initialCenter?: Coords | null;
   style?: ViewStyle | ViewStyle[];
   centerOnUser?: boolean;
+  // Fires with true while the user is touching the map — lets a parent
+  // ScrollView pause its own scrolling so map pan/pinch stays smooth.
+  onTouchActive?: (active: boolean) => void;
 };
 
 type Marker = {
@@ -42,17 +46,32 @@ function buildHtml(initialLat: number, initialLng: number) {
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   html, body, #map { height: 100%; margin: 0; padding: 0; background: #e6e9ee; }
-  .station-pin { width: 30px; height: 38px; }
-  .user-dot {
-    width: 16px; height: 16px; border-radius: 8px;
-    background: #2563eb; border: 3px solid #fff; box-shadow: 0 0 0 4px rgba(37,99,235,0.25);
+  .st-wrap { display: flex; flex-direction: column; align-items: center; }
+  .st-img {
+    width: 34px; height: 36px; object-fit: contain;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35));
   }
+  .st-img.sel { transform: scale(1.2); filter: drop-shadow(0 0 4px rgba(252,76,2,0.9)); }
+  .dist {
+    margin-top: 2px; background: #ffffff; color: #111827;
+    font: 700 10px/1.3 -apple-system, Roboto, sans-serif;
+    padding: 1px 6px; border-radius: 8px; white-space: nowrap;
+    border: 1px solid rgba(0,0,0,0.08); box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .dist.sel { background: #fc4c02; color: #fff; border-color: #fc4c02; }
+  /* The pin PNG has transparent padding around the artwork, so it is
+     rendered larger and anchored at the pin's actual tip. It already has
+     a baked-in 3D shadow — no extra CSS shadow needed. */
+  .user-pin { width: 58px; height: 58px; object-fit: contain; }
 </style>
 </head>
 <body>
 <div id="map"></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+  var ICON_USER = '${LIVE_PIN_ICON}';
+  var ICON_STATION = '${STATION_ICON}';
+
   var post = function(msg){
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       window.ReactNativeWebView.postMessage(JSON.stringify(msg));
@@ -66,30 +85,93 @@ function buildHtml(initialLat: number, initialLng: number) {
 
   var markers = {};
   var userMarker = null;
+  var stationList = [];
+  var userPos = null;
+  var userInteracted = false;
+  var programmaticMove = false;
 
-  function pinIcon(selected){
-    var color = selected ? '#fc4c02' : '#16a34a';
-    var html = '<svg class="station-pin" viewBox="0 0 30 38" xmlns="http://www.w3.org/2000/svg">' +
-      '<path d="M15 0C7 0 0 6.5 0 14.5 0 25 15 38 15 38s15-13 15-23.5C30 6.5 23 0 15 0z" fill="' + color + '"/>' +
-      '<circle cx="15" cy="14" r="6" fill="#fff"/>' +
-      '</svg>';
-    return L.divIcon({ className: '', html: html, iconSize: [30,38], iconAnchor: [15,38] });
+  // Stop auto-fitting once the user pans/zooms the map themselves.
+  map.on('dragstart', function(){ userInteracted = true; });
+  map.on('zoomstart', function(){ if (!programmaticMove) userInteracted = true; });
+
+  // Tell the app while a finger is on the map so the outer page scroll can
+  // pause and map pan/pinch gestures stay smooth.
+  document.addEventListener('touchstart', function(){
+    post({ type: 'touch', active: true });
+  }, { passive: true });
+  document.addEventListener('touchend', function(e){
+    if (!e.touches || e.touches.length === 0) post({ type: 'touch', active: false });
+  }, { passive: true });
+  document.addEventListener('touchcancel', function(){
+    post({ type: 'touch', active: false });
+  }, { passive: true });
+
+  // Frame the view so the live location sits in the CENTRE of the map and
+  // the nearby stations are visible around it. Each nearby station is
+  // mirrored across the user's position so the bounds stay symmetric —
+  // which keeps the user pinned exactly at the middle.
+  function fitAll(){
+    if (userInteracted || !stationList.length) return;
+    var bounds;
+    if (userPos){
+      var sorted = stationList.slice().sort(function(a, b){
+        return distKm(userPos.lat, userPos.lng, a.lat, a.lng) -
+               distKm(userPos.lat, userPos.lng, b.lat, b.lng);
+      });
+      bounds = L.latLngBounds([[userPos.lat, userPos.lng]]);
+      sorted.slice(0, 3).forEach(function(s){
+        bounds.extend([s.lat, s.lng]);
+        bounds.extend([2 * userPos.lat - s.lat, 2 * userPos.lng - s.lng]);
+      });
+    } else {
+      bounds = L.latLngBounds(stationList.map(function(s){ return [s.lat, s.lng]; }));
+    }
+    programmaticMove = true;
+    map.fitBounds(bounds, { padding: [48, 48], maxZoom: 16 });
+    setTimeout(function(){ programmaticMove = false; }, 900);
+  }
+
+  function distKm(aLat, aLng, bLat, bLng){
+    var R = 6371;
+    var toRad = function(v){ return v * Math.PI / 180; };
+    var dLat = toRad(bLat - aLat);
+    var dLng = toRad(bLng - aLng);
+    var h = Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(toRad(aLat)) * Math.cos(toRad(bLat)) * Math.sin(dLng/2) * Math.sin(dLng/2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+
+  function distLabel(s){
+    if (!userPos) return '';
+    var km = distKm(userPos.lat, userPos.lng, s.lat, s.lng);
+    var text = km < 10 ? km.toFixed(1) : String(Math.round(km));
+    return '<div class="dist' + (s.selected ? ' sel' : '') + '">' + text + ' km</div>';
+  }
+
+  function stationIcon(s){
+    var html = '<div class="st-wrap">' +
+      '<img class="st-img' + (s.selected ? ' sel' : '') + '" src="' + ICON_STATION + '"/>' +
+      distLabel(s) +
+      '</div>';
+    return L.divIcon({ className: '', html: html, iconSize: [70, 56], iconAnchor: [35, 36] });
   }
 
   function userIcon(){
-    return L.divIcon({ className: '', html: '<div class="user-dot"></div>', iconSize: [16,16], iconAnchor: [8,8] });
+    var html = '<img class="user-pin" src="' + ICON_USER + '"/>';
+    // Anchor at the visible pin tip (accounts for the PNG's transparent padding).
+    return L.divIcon({ className: '', html: html, iconSize: [58, 58], iconAnchor: [29, 53] });
   }
 
-  function setStations(list){
+  function renderStations(){
     var seen = {};
-    list.forEach(function(s){
+    stationList.forEach(function(s){
       seen[s.id] = true;
       var existing = markers[s.id];
       if (existing){
         existing.setLatLng([s.lat, s.lng]);
-        existing.setIcon(pinIcon(!!s.selected));
+        existing.setIcon(stationIcon(s));
       } else {
-        var m = L.marker([s.lat, s.lng], { icon: pinIcon(!!s.selected) }).addTo(map);
+        var m = L.marker([s.lat, s.lng], { icon: stationIcon(s) }).addTo(map);
         if (s.name) m.bindPopup('<b>' + s.name + '</b>' + (s.address ? '<br/>' + s.address : ''));
         m.on('click', function(){
           post({ type: 'selectStation', id: s.id });
@@ -102,13 +184,25 @@ function buildHtml(initialLat: number, initialLng: number) {
     });
   }
 
+  function setStations(list){
+    stationList = list || [];
+    renderStations();
+    fitAll();
+  }
+
   function setUser(lat, lng){
     if (lat == null || lng == null){
+      userPos = null;
       if (userMarker){ map.removeLayer(userMarker); userMarker = null; }
+      renderStations();
       return;
     }
+    userPos = { lat: lat, lng: lng };
     if (userMarker) userMarker.setLatLng([lat, lng]);
-    else userMarker = L.marker([lat, lng], { icon: userIcon(), interactive: false }).addTo(map);
+    else userMarker = L.marker([lat, lng], { icon: userIcon(), interactive: false, zIndexOffset: 1000 }).addTo(map);
+    // refresh station labels so distances are measured from the live position
+    renderStations();
+    fitAll();
   }
 
   function setCenter(lat, lng, zoom){
@@ -142,6 +236,7 @@ export function LiveMap<T extends MapStation = MapStation>({
   initialCenter,
   style,
   centerOnUser = true,
+  onTouchActive,
 }: LiveMapProps<T>) {
   const webRef = useRef<WebView | null>(null);
   const [ready, setReady] = useState(false);
@@ -181,8 +276,9 @@ export function LiveMap<T extends MapStation = MapStation>({
     void (async () => {
       const coords = await fetchCoordsIfAllowed();
       if (cancelled || !coords) return;
+      // The map fits itself around the user + nearby stations (fitAll),
+      // so no explicit centring is needed here.
       post({ type: 'user', lat: coords.latitude, lng: coords.longitude });
-      post({ type: 'center', lat: coords.latitude, lng: coords.longitude, zoom: 15 });
     })();
     return () => {
       cancelled = true;
@@ -206,6 +302,7 @@ export function LiveMap<T extends MapStation = MapStation>({
         scalesPageToFit={false}
         scrollEnabled={false}
         bounces={false}
+        nestedScrollEnabled
         androidLayerType="hardware"
         onMessage={(event) => {
           try {
@@ -215,6 +312,8 @@ export function LiveMap<T extends MapStation = MapStation>({
             } else if (msg.type === 'selectStation' && onSelectStation) {
               const match = (stations || []).find((s) => stationKey(s) === msg.id);
               if (match) onSelectStation(match);
+            } else if (msg.type === 'touch') {
+              onTouchActive?.(!!msg.active);
             }
           } catch {
             // ignore malformed messages

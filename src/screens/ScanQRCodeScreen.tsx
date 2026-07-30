@@ -1,7 +1,20 @@
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Modal,
+  PermissionsAndroid,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { Camera, CameraType } from 'react-native-camera-kit';
 import Svg, { Path } from 'react-native-svg';
 import { GradientButton } from '../components/GradientButton';
 import { ArrowLeftIcon } from '../components/RideIcons';
+import { STATUS_TOP_INSET } from '../utils/statusBarInset';
 
 export function ScanQRCodeScreen({
   onBack,
@@ -12,6 +25,40 @@ export function ScanQRCodeScreen({
   onScanned: (code: string) => void;
   expectedCode?: string;
 }) {
+  void expectedCode; // backend validates the unlock code
+  const [permission, setPermission] = useState<'pending' | 'granted' | 'denied'>('pending');
+  const [torchOn, setTorchOn] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualCode, setManualCode] = useState('');
+  const scannedRef = useRef(false);
+
+  useEffect(() => {
+    void (async () => {
+      if (Platform.OS !== 'android') {
+        setPermission('granted');
+        return;
+      }
+      const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA, {
+        title: 'Camera permission',
+        message: 'Camera is needed to scan the scooty QR code and unlock your ride.',
+        buttonPositive: 'Allow',
+        buttonNegative: 'Deny',
+      });
+      setPermission(result === PermissionsAndroid.RESULTS.GRANTED ? 'granted' : 'denied');
+    })();
+  }, []);
+
+  const submitCode = (raw: string) => {
+    const code = String(raw || '').trim();
+    if (!code || scannedRef.current) return;
+    scannedRef.current = true;
+    // Allow a re-scan if the backend rejects this code.
+    setTimeout(() => {
+      scannedRef.current = false;
+    }, 3000);
+    onScanned(code);
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
@@ -19,35 +66,89 @@ export function ScanQRCodeScreen({
           <ArrowLeftIcon size={24} color="#1c1c1e" />
         </Pressable>
         <Text style={styles.headerTitle}>Scan QR Code</Text>
-        <Pressable style={styles.flashButton}>
-          <FlashIcon size={24} color="#1c1c1e" />
+        <Pressable style={styles.flashButton} onPress={() => setTorchOn((t) => !t)} hitSlop={8}>
+          <FlashIcon size={24} color={torchOn ? '#fc4c02' : '#1c1c1e'} />
         </Pressable>
       </View>
 
       <View style={styles.cameraFrame}>
-        <View style={styles.frameWrap}>
+        {permission === 'granted' ? (
+          <Camera
+            style={StyleSheet.absoluteFillObject}
+            cameraType={CameraType.Back}
+            scanBarcode
+            onReadCode={(event: { nativeEvent: { codeStringValue?: string } }) =>
+              submitCode(event.nativeEvent?.codeStringValue || '')
+            }
+            showFrame={false}
+            torchMode={torchOn ? 'on' : 'off'}
+          />
+        ) : (
+          <View style={styles.permissionBox}>
+            <Text style={styles.permissionText}>
+              {permission === 'pending'
+                ? 'Opening camera…'
+                : 'Camera permission is needed to scan the QR code.\nAllow camera access from Settings, or enter the code manually below.'}
+            </Text>
+          </View>
+        )}
+
+        <View style={styles.frameWrap} pointerEvents="none">
           <View style={styles.frameOuter}>
             <View style={[styles.corner, styles.cornerTL]} />
             <View style={[styles.corner, styles.cornerTR]} />
             <View style={[styles.corner, styles.cornerBL]} />
             <View style={[styles.corner, styles.cornerBR]} />
           </View>
-          <View style={styles.scanLine} />
         </View>
-        <Text style={styles.hint}>Position the QR code within the frame</Text>
+        <View style={styles.hintWrap} pointerEvents="none">
+          <Text style={styles.hint}>Position the QR code within the frame</Text>
+        </View>
       </View>
 
       <View style={styles.footer}>
-        <Pressable style={styles.secondaryButton}>
+        <Pressable style={styles.secondaryButton} onPress={() => setManualOpen(true)}>
           <Text style={styles.secondaryText}>Enter Code Manually</Text>
         </Pressable>
-        <GradientButton
-          label="Complete Scan"
-          onPress={() => onScanned(expectedCode || '')}
-          height={52}
-          style={styles.primaryButton}
-        />
       </View>
+
+      <Modal
+        visible={manualOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setManualOpen(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setManualOpen(false)} />
+        <View style={styles.modalWrap} pointerEvents="box-none">
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Enter Unlock Code</Text>
+            <Text style={styles.modalSubtitle}>
+              The unlock code is shown on your booking (e.g. MV-A1B2C3).
+            </Text>
+            <TextInput
+              value={manualCode}
+              onChangeText={setManualCode}
+              placeholder="MV-XXXXXX"
+              placeholderTextColor="#9ca3af"
+              autoCapitalize="characters"
+              autoFocus
+              style={styles.modalInput}
+              selectionColor="#fc4c02"
+              cursorColor="#fc4c02"
+            />
+            <GradientButton
+              label="Unlock Ride"
+              onPress={() => {
+                setManualOpen(false);
+                submitCode(manualCode);
+              }}
+              disabled={!manualCode.trim()}
+              height={50}
+              radius={12}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -61,7 +162,6 @@ function FlashIcon({ size, color }: { size: number; color: string }) {
         strokeWidth={1.8}
         strokeLinejoin="round"
       />
-      <Path d="m4 4 16 16" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
     </Svg>
   );
 }
@@ -74,6 +174,9 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: '#0a0f1a',
+    // Extend the dark backdrop under the status bar; content stays below it.
+    marginTop: -STATUS_TOP_INSET,
+    paddingTop: STATUS_TOP_INSET,
   },
   header: {
     height: 56,
@@ -109,9 +212,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#05080f',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 120,
+  },
+  permissionBox: {
+    paddingHorizontal: 32,
+  },
+  permissionText: {
+    color: '#ffffff',
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
   },
   frameWrap: {
+    position: 'absolute',
     width: FRAME_SIZE,
     height: FRAME_SIZE,
     alignItems: 'center',
@@ -121,9 +233,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: FRAME_SIZE,
     height: FRAME_SIZE,
-    borderWidth: BORDER,
-    borderColor: '#ffffff',
-    borderRadius: 24,
   },
   corner: {
     position: 'absolute',
@@ -132,56 +241,51 @@ const styles = StyleSheet.create({
     borderColor: '#ffffff',
   },
   cornerTL: {
-    top: 10,
-    left: 10,
+    top: 0,
+    left: 0,
     borderLeftWidth: BORDER,
     borderTopWidth: BORDER,
     borderTopLeftRadius: 24,
   },
   cornerTR: {
-    top: 10,
-    right: 10,
+    top: 0,
+    right: 0,
     borderRightWidth: BORDER,
     borderTopWidth: BORDER,
     borderTopRightRadius: 24,
   },
   cornerBL: {
-    bottom: 10,
-    left: 10,
+    bottom: 0,
+    left: 0,
     borderLeftWidth: BORDER,
     borderBottomWidth: BORDER,
     borderBottomLeftRadius: 24,
   },
   cornerBR: {
-    bottom: 10,
-    right: 10,
+    bottom: 0,
+    right: 0,
     borderRightWidth: BORDER,
     borderBottomWidth: BORDER,
     borderBottomRightRadius: 24,
   },
-  scanLine: {
-    width: 8,
-    height: 128,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
-    borderRadius: 4,
+  hintWrap: {
+    position: 'absolute',
+    bottom: 60,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
   },
   hint: {
-    marginTop: 40,
     color: '#ffffff',
     fontSize: 16,
     lineHeight: 24,
     textAlign: 'center',
   },
   footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     paddingHorizontal: 24,
-    paddingTop: 24,
+    paddingTop: 20,
     paddingBottom: 24,
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    gap: 16,
   },
   secondaryButton: {
     height: 51,
@@ -193,11 +297,47 @@ const styles = StyleSheet.create({
   },
   secondaryText: {
     color: '#fd540d',
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '600',
     lineHeight: 24,
   },
-  primaryButton: {
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15,23,42,0.6)',
+  },
+  modalWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 24,
+    gap: 12,
+  },
+  modalTitle: {
+    color: '#101828',
+    fontSize: 19,
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    color: '#6a7282',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  modalInput: {
+    height: 52,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    paddingHorizontal: 16,
+    color: '#101828',
+    fontSize: 17,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    marginBottom: 4,
   },
 });

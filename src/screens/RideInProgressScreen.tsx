@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Image,
   Modal,
@@ -8,35 +8,120 @@ import {
   Text,
   View,
 } from 'react-native';
+import Geolocation from '@react-native-community/geolocation';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { BatteryIcon, CalendarIcon, ClockIcon } from '../components/RideIcons';
+import { requestLocationPermission } from '../utils/location';
+import { STATUS_TOP_INSET } from '../utils/statusBarInset';
 
 const RideScene = require('../assets/images/preride-scooter.jpg');
+
+const toRad = (value: number) => (value * Math.PI) / 180;
+
+const haversineKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return 2 * R * Math.asin(Math.sqrt(a));
+};
+
+const formatDuration = (ms: number) => {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return hours > 0 ? `${hours}:${pad(minutes)}:${pad(seconds)}` : `${minutes}:${pad(seconds)}`;
+};
+
+const formatTimeLeft = (ms: number) => {
+  if (ms <= 0) return 'Time over';
+  const totalMinutes = Math.floor(ms / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return `${days}d ${hours}h left`;
+  if (hours > 0) return `${hours}h ${minutes}m left`;
+  return `${minutes}m left`;
+};
 
 export function RideInProgressScreen({
   onEmergency,
   onPauseResume,
   onEndRide,
-  rideTime = '—',
-  distance = 0,
-  battery = 0,
-  speed = 0,
   planName = 'Plan unavailable',
-  timeLeft = 'Time remaining unavailable',
+  battery = null,
+  startedAt = null,
+  endAt = null,
 }: {
   onEmergency?: () => void;
   onPauseResume?: () => void;
   onEndRide: () => void;
-  rideTime?: string;
-  distance?: number;
-  battery?: number;
-  speed?: number;
   planName?: string;
-  timeLeft?: string;
+  battery?: number | null;
+  startedAt?: string | null;
+  endAt?: string | null;
 }) {
   const [sosOpen, setSosOpen] = useState(false);
   const [paused, setPaused] = useState(false);
-  const distanceText = `${distance.toFixed(2)} km`;
+  const [now, setNow] = useState(() => Date.now());
+  const [speed, setSpeed] = useState(0);
+  const [distanceKm, setDistanceKm] = useState(0);
+  const lastPointRef = useRef<{ latitude: number; longitude: number } | null>(null);
+  const pausedRef = useRef(false);
+  pausedRef.current = paused;
+
+  // Clock tick — drives the live duration and time-left labels.
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Live GPS — real speed and distance travelled during the ride.
+  useEffect(() => {
+    let watchId: number | null = null;
+    let active = true;
+
+    void (async () => {
+      const ok = await requestLocationPermission();
+      if (!ok || !active) return;
+      watchId = Geolocation.watchPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          const rawSpeed = position.coords.speed;
+          const kmh = rawSpeed != null && Number.isFinite(rawSpeed) && rawSpeed > 0 ? rawSpeed * 3.6 : 0;
+          setSpeed(Math.round(kmh));
+
+          const last = lastPointRef.current;
+          lastPointRef.current = { latitude, longitude };
+          if (pausedRef.current || !last) return;
+
+          const stepKm = haversineKm(last.latitude, last.longitude, latitude, longitude);
+          // Ignore GPS jitter (<3 m) and impossible jumps (>1 km per update).
+          if (stepKm > 0.003 && stepKm < 1) {
+            setDistanceKm((current) => current + stepKm);
+          }
+        },
+        () => undefined,
+        { enableHighAccuracy: true, distanceFilter: 5, interval: 3000, fastestInterval: 2000 },
+      );
+    })();
+
+    return () => {
+      active = false;
+      if (watchId != null) Geolocation.clearWatch(watchId);
+    };
+  }, []);
+
+  const startMs = startedAt ? new Date(startedAt).getTime() : NaN;
+  const endMs = endAt ? new Date(endAt).getTime() : NaN;
+  const rideTime = Number.isFinite(startMs) ? formatDuration(now - startMs) : '—';
+  const timeLeft = Number.isFinite(endMs) ? formatTimeLeft(endMs - now) : '—';
+  const batteryText = battery != null && Number.isFinite(battery) ? `${battery}%` : '—';
+  const distanceText = `${distanceKm.toFixed(2)} km`;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -60,7 +145,7 @@ export function RideInProgressScreen({
         <View style={styles.statsRow}>
           <StatCard icon={<ClockIcon size={22} color="#22c55e" />} label="Duration" value={rideTime} />
           <StatCard icon={<GaugeIcon color="#22c55e" />} label="Speed" value={`${speed} km/h`} />
-          <StatCard icon={<BatteryIcon size={22} color="#22c55e" />} label="Battery" value={`${battery}%`} />
+          <StatCard icon={<BatteryIcon size={22} color="#22c55e" />} label="Battery" value={batteryText} />
         </View>
       </View>
 
@@ -186,6 +271,9 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: '#111827',
+    // Extend the ride photo/backdrop under the status bar; content stays below.
+    marginTop: -STATUS_TOP_INSET,
+    paddingTop: STATUS_TOP_INSET,
   },
   heroImage: {
     ...StyleSheet.absoluteFillObject,

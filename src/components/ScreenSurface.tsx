@@ -1,6 +1,7 @@
 import React, { ReactNode } from 'react';
 import { SafeAreaView, StyleSheet, View, ViewStyle } from 'react-native';
 import { AppBackground } from './AppBackground';
+import { STATUS_TOP_INSET } from '../utils/statusBarInset';
 
 export const DESIGN_SURFACE_WIDTH = 390.4873046875;
 
@@ -29,6 +30,10 @@ const styles = StyleSheet.create({
   surface: {
     flex: 1,
     width: '100%',
+    // Stretch the surface tint up under the status bar while keeping the
+    // children exactly where they were.
+    marginTop: -STATUS_TOP_INSET,
+    paddingTop: STATUS_TOP_INSET,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderColor: 'rgba(255, 255, 255, 0.45)',
     borderWidth: 1,

@@ -7,6 +7,7 @@ import { RegisterScreen } from './src/screens/RegisterScreen';
 import { KycScreen } from './src/screens/KycScreen';
 import { PendingApprovalScreen } from './src/screens/PendingApprovalScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
+import { EditLocationScreen } from './src/screens/EditLocationScreen';
 import { PermissionsScreen } from './src/screens/PermissionsScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
 import { RidePlanScreen, type RidePlan, type RidePlanId } from './src/screens/RidePlanScreen';
@@ -55,7 +56,8 @@ import {
   userApiErrorMessage,
 } from './src/services/userApi';
 import { fetchCoordsIfAllowed } from './src/utils/location';
-import { formatCurrency } from './src/utils/format';
+import { formatCurrency, formatTime12 } from './src/utils/format';
+import { compressImage } from './src/utils/image-compression';
 
 type AppStep =
   | 'splash'
@@ -65,6 +67,7 @@ type AppStep =
   | 'pending-approval'
   | 'permissions'
   | 'dashboard'
+  | 'edit-location'
   | 'search'
   | 'ride-plan'
   | 'time-slot'
@@ -106,6 +109,9 @@ const mapRidePlanIdToPlanCode = (id?: RidePlanId | null) => {
   if (id === 'monthly') return 'MONTHLY';
   return 'HOURLY';
 };
+
+// Stations are only shown within this distance of the selected location.
+const STATION_RADIUS_KM = 20;
 
 const AUTH_TOKEN_KEY = 'scooty_rental_user_auth_token';
 const UserAuthStorage = NativeModules.UserAuthStorage as
@@ -203,6 +209,21 @@ const resolveBookingDate = (selection: string) => {
   return `${year}-${month}-${day}`;
 };
 
+const rideStartsInLabel = (startAt?: string | null) => {
+  if (!startAt) return undefined;
+  const start = new Date(startAt);
+  if (Number.isNaN(start.getTime())) return undefined;
+  const diffMs = start.getTime() - Date.now();
+  if (diffMs <= 0) return 'Now';
+  const totalMinutes = Math.round(diffMs / 60000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes} min`;
+};
+
 const formatScheduleLabel = (selection?: { date: string; time: string; duration: string } | null) => {
   if (!selection) return undefined;
 
@@ -216,7 +237,7 @@ const formatScheduleLabel = (selection?: { date: string; time: string; duration:
           ? selection.date
           : parsed.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
 
-  return `${dateLabel}, ${selection.time} • ${selection.duration}`;
+  return `${dateLabel}, ${formatTime12(selection.time)} • ${selection.duration}`;
 };
 
 export default function App() {
@@ -268,6 +289,7 @@ export default function App() {
   const [createdBooking, setCreatedBooking] = useState<BookingItem | null>(null);
   const [bookingBusy, setBookingBusy] = useState(false);
   const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [ridesLoading, setRidesLoading] = useState(false);
 
   // UI state
   const [activeTab, setActiveTab] = useState<TabKey>('home');
@@ -289,6 +311,41 @@ export default function App() {
 
   const hasCompletedPermissions = (settings?: User['settings'] | null) => {
     return Boolean(settings?.location?.updatedAt);
+  };
+
+  // Station query for the user's effective location:
+  // - city picked from the list (has its own coords) → 20 km around that city's centre
+  // - city typed in the profile (no reliable coords) → filter by city name
+  // - GPS / live location → 20 km around the user's coordinates
+  const stationQueryFor = (
+    profileUser?: User | null,
+    liveCoords?: { latitude: number; longitude: number } | null,
+  ) => {
+    const location = profileUser?.settings?.location;
+
+    if (location?.source === 'manual' && location?.latitude != null && location?.longitude != null) {
+      return {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        radiusKm: STATION_RADIUS_KM,
+      };
+    }
+
+    if (location?.source === 'manual' || location?.source === 'profile') {
+      return {
+        city: location?.city || profileUser?.city || undefined,
+        latitude: liveCoords?.latitude ?? undefined,
+        longitude: liveCoords?.longitude ?? undefined,
+      };
+    }
+
+    const latitude = liveCoords?.latitude ?? location?.latitude ?? undefined;
+    const longitude = liveCoords?.longitude ?? location?.longitude ?? undefined;
+    return {
+      latitude,
+      longitude,
+      radiusKm: latitude != null && longitude != null ? STATION_RADIUS_KM : undefined,
+    };
   };
 
   const loadRidePlans = async (stationId?: string | null) => {
@@ -432,12 +489,16 @@ export default function App() {
     };
 
     void sync();
+    const pollInterval = setInterval(() => {
+      if (AppState.currentState === 'active') void sync();
+    }, 10000);
     const subscription = AppState.addEventListener('change', (next) => {
       if (next === 'active') void sync();
     });
 
     return () => {
       active = false;
+      clearInterval(pollInterval);
       subscription.remove();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -463,6 +524,93 @@ export default function App() {
   useEffect(() => {
     if (!token || step !== 'bookings') return;
     void loadBookings();
+  }, [step, token]);
+
+  // Always pull fresh ride history from the backend when the screen opens.
+  useEffect(() => {
+    if (!token || step !== 'ride-history') return;
+    let active = true;
+    setRidesLoading(true);
+    void userApi
+      .rides(token)
+      .then((result) => {
+        if (active) setRides(result.rides || []);
+      })
+      .catch(() => {
+        if (active) setRides([]);
+      })
+      .finally(() => {
+        if (active) setRidesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [step, token]);
+
+  // While the user waits on the "Booking Requested" screen, poll the booking
+  // so the screen flips to Confirmed as soon as the station admin approves.
+  useEffect(() => {
+    if (!token || step !== 'booking-confirmed') return;
+    const bookingId = createdBooking?._id;
+    if (!bookingId || createdBooking?.status !== 'PENDING_PAYMENT') return;
+    let active = true;
+
+    const check = async () => {
+      try {
+        const result = await userApi.bookingDetail(token, bookingId);
+        if (!active || !result.booking) return;
+        if (result.booking.status === 'CANCELLED') {
+          setCreatedBooking(result.booking);
+          Alert.alert('Booking cancelled', 'The station admin cancelled this booking.');
+          setStep('bookings');
+          return;
+        }
+        if (result.booking.status !== 'PENDING_PAYMENT') {
+          setCreatedBooking(result.booking);
+        }
+      } catch {
+        // polling is best-effort
+      }
+    };
+
+    void check();
+    const interval = setInterval(() => {
+      if (AppState.currentState === 'active') void check();
+    }, 8000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, token, createdBooking?._id, createdBooking?.status]);
+
+  // Fetch the real quote (base fare + deposit + tax + fees) as soon as the
+  // user reaches the confirm screen, so both the confirm and payment screens
+  // show the exact amount that will actually be charged.
+  useEffect(() => {
+    if (!token || step !== 'confirm-ride') return;
+    if (!selectedRidePlan || !selectedPickupStation || !selectedDropStation || !selectedTimeSlot) return;
+    let active = true;
+    void userApi
+      .bookingQuote(token, {
+        pickupStationId: selectedPickupStation.id,
+        dropStationId: selectedDropStation.id,
+        planCode: resolveRidePlanCode(selectedRidePlan),
+        date: resolveBookingDate(selectedTimeSlot.date),
+        startTime: selectedTimeSlot.time,
+        walletToUse: 0,
+      })
+      .then((result) => {
+        if (active) setBookingQuote(result.quote);
+      })
+      .catch(() => {
+        // quote preview is best-effort; booking re-quotes on confirm
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, token]);
 
   useEffect(() => {
@@ -492,8 +640,16 @@ export default function App() {
   ): Promise<{ latitude: number; longitude: number } | null> => {
     if (!profileUser?.settings?.permissions?.location) return null;
 
+    // A manually chosen city stores that city's own coordinates — never
+    // overwrite them with GPS, or the 20 km radius would drift back to
+    // wherever the user physically is.
+    const storedLocation = profileUser.settings?.location;
+    if (storedLocation?.source === 'manual') return null;
+
     const coords = await fetchCoordsIfAllowed();
     if (!coords) return null;
+
+    const keepChosenCity = storedLocation?.source === 'profile';
 
     try {
       const result = await userApi.updateSettings(authToken, {
@@ -502,10 +658,12 @@ export default function App() {
           latitude: coords.latitude,
           longitude: coords.longitude,
           accuracy: coords.accuracy ?? null,
-          city: profileUser.city || profileUser.settings?.location?.city || '',
-          state: profileUser.state || profileUser.settings?.location?.state || '',
-          pincode: profileUser.pincode || profileUser.settings?.location?.pincode || '',
-          source: 'gps',
+          city: keepChosenCity
+            ? storedLocation?.city || ''
+            : profileUser.city || storedLocation?.city || '',
+          state: profileUser.state || storedLocation?.state || '',
+          pincode: profileUser.pincode || storedLocation?.pincode || '',
+          source: keepChosenCity ? 'profile' : 'gps',
           updatedAt: new Date().toISOString(),
         },
       });
@@ -527,11 +685,10 @@ export default function App() {
       setDashboard(profileResult.dashboard);
 
       const liveCoords = await refreshLiveLocation(token, profileResult.user);
-      const storedLocation = profileResult.user?.settings?.location;
-      const stationsResult = await userApi.stations(token, {
-        latitude: liveCoords?.latitude ?? storedLocation?.latitude ?? undefined,
-        longitude: liveCoords?.longitude ?? storedLocation?.longitude ?? undefined,
-      });
+      const stationsResult = await userApi.stations(
+        token,
+        stationQueryFor(profileResult.user, liveCoords),
+      );
       setStations(stationsResult.stations);
 
       try {
@@ -685,10 +842,10 @@ export default function App() {
 
         if (coords) {
           try {
-            const stationsResult = await userApi.stations(token, {
-              latitude: coords.latitude,
-              longitude: coords.longitude,
-            });
+            const stationsResult = await userApi.stations(
+              token,
+              stationQueryFor(result.user, coords),
+            );
             setStations(stationsResult.stations);
           } catch (error) {
             console.warn('Failed to refresh stations after location update:', error);
@@ -935,13 +1092,150 @@ export default function App() {
         pincode: payload.pincode || undefined,
       }, profilePhoto || null);
 
-      setUser(result.user);
+      let updatedUser = result.user;
       if (result.dashboard) {
         setDashboard(result.dashboard);
       }
+
+      const newCity = payload.city.trim();
+      const previousCity = (user?.settings?.location?.city || user?.city || '').trim();
+      if (newCity && newCity.toLowerCase() !== previousCity.toLowerCase()) {
+        const currentLocation = updatedUser?.settings?.location || user?.settings?.location;
+
+        try {
+          // updateSettings replaces the whole location object, so resend existing coords
+          const settingsResult = await userApi.updateSettings(token, {
+            location: {
+              isEnabled: currentLocation?.isEnabled ?? false,
+              latitude: currentLocation?.latitude ?? null,
+              longitude: currentLocation?.longitude ?? null,
+              accuracy: currentLocation?.accuracy ?? null,
+              city: newCity,
+              state: updatedUser?.state || user?.state || '',
+              pincode: payload.pincode || updatedUser?.pincode || '',
+              source: 'profile',
+              updatedAt: new Date().toISOString(),
+            },
+          });
+          updatedUser = settingsResult.user;
+        } catch (error) {
+          console.warn('Failed to sync location settings with new city:', error);
+        }
+
+        try {
+          const stationsResult = await userApi.stations(token, {
+            city: newCity,
+            latitude: currentLocation?.latitude ?? undefined,
+            longitude: currentLocation?.longitude ?? undefined,
+          });
+          setStations(stationsResult.stations);
+        } catch (error) {
+          console.warn('Failed to refresh stations for new city:', error);
+        }
+      }
+
+      setUser(updatedUser);
       setStep('profile');
     } catch (error) {
       Alert.alert('Error', userApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveLocation = async (
+    city: string,
+    state?: string,
+    coords?: { latitude: number; longitude: number },
+  ) => {
+    if (!token) return;
+    const newCity = city.trim();
+    if (!newCity) {
+      Alert.alert('Enter a city', 'Please type a city name to change your location.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const currentLocation = user?.settings?.location;
+      // Store the chosen city's own coordinates so the 20 km radius is
+      // anchored to that city (and survives app reloads).
+      const result = await userApi.updateSettings(token, {
+        location: {
+          isEnabled: currentLocation?.isEnabled ?? false,
+          latitude: coords?.latitude ?? null,
+          longitude: coords?.longitude ?? null,
+          accuracy: null,
+          city: newCity,
+          state: state?.trim() || user?.state || '',
+          pincode: user?.pincode || '',
+          source: 'manual',
+          updatedAt: new Date().toISOString(),
+        },
+      });
+      setUser(result.user);
+
+      const stationsResult = await userApi.stations(
+        token,
+        coords
+          ? {
+              latitude: coords.latitude,
+              longitude: coords.longitude,
+              radiusKm: STATION_RADIUS_KM,
+            }
+          : { city: newCity },
+      );
+      setStations(stationsResult.stations);
+
+      setActiveTab('home');
+      setStep('dashboard');
+    } catch (error) {
+      Alert.alert('Could not update location', userApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUseCurrentLocation = async () => {
+    if (!token) return;
+
+    try {
+      setLoading(true);
+      const coords = await fetchCoordsIfAllowed();
+      if (!coords) {
+        Alert.alert(
+          'Location unavailable',
+          'Please allow location access to use your current location.',
+        );
+        return;
+      }
+
+      const result = await userApi.updateSettings(token, {
+        location: {
+          isEnabled: true,
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          accuracy: coords.accuracy ?? null,
+          city: '',
+          state: user?.state || '',
+          pincode: user?.pincode || '',
+          source: 'gps',
+          updatedAt: new Date().toISOString(),
+        },
+      });
+      setUser(result.user);
+
+      const stationsResult = await userApi.stations(token, {
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        radiusKm: STATION_RADIUS_KM,
+      });
+      setStations(stationsResult.stations);
+
+      setActiveTab('home');
+      setStep('dashboard');
+    } catch (error) {
+      Alert.alert('Could not update location', userApiErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -1035,7 +1329,8 @@ export default function App() {
         walletToUse,
         paymentMethod,
         paymentReferenceId: `${paymentMethod}-${Date.now()}`,
-        autoConfirm: true,
+        // Bookings wait for station admin approval before getting confirmed.
+        autoConfirm: false,
       });
       setCreatedBooking(bookingResult.booking);
 
@@ -1078,31 +1373,14 @@ export default function App() {
     }
   };
 
-  const handleStartRide = async () => {
-    const bookingId = createdBooking?._id || selectedRide?._id;
-    if (!token || !bookingId) {
+  // Start Ride always goes through the full flow:
+  // Confirm Ride (pre-ride) → Scan QR → ride starts.
+  const handleStartRide = () => {
+    if (!createdBooking?._id && !selectedRide?._id) {
       Alert.alert('Cannot start ride', 'Booking is not ready yet. Please try again.');
       return;
     }
-    try {
-      setBookingBusy(true);
-      const result = await userApi.startRide(token, bookingId, {
-        unlockCode: createdBooking?.unlockCode || selectedRide?.unlockCode,
-      });
-      setCreatedBooking(result.booking);
-      setSelectedRide({
-        ...result.booking,
-        status: 'ongoing',
-        unlockCode: result.booking.unlockCode,
-        distance: 0,
-        fare: result.booking.pricing?.totalPayable,
-      });
-      setStep('ride-progress');
-    } catch (error) {
-      Alert.alert('Could not start ride', userApiErrorMessage(error));
-    } finally {
-      setBookingBusy(false);
-    }
+    setStep('pre-ride');
   };
 
   const handleViewBookingDetails = (booking: BookingItem) => {
@@ -1116,31 +1394,44 @@ export default function App() {
   };
 
   const handleScannedCode = (code: string) => {
-    setSelectedRide((current) =>
-      current
-        ? {
-            ...current,
-            unlockCode: code,
-            status: 'ongoing',
-          }
-        : current,
-    );
-    setStep('ride-progress');
+    const bookingId = createdBooking?._id || selectedRide?._id;
+    if (!token || !bookingId) {
+      Alert.alert('Cannot start ride', 'Booking is not ready yet. Please try again.');
+      return;
+    }
+
+    void (async () => {
+      try {
+        setBookingBusy(true);
+        const result = await userApi.startRide(token, bookingId, { unlockCode: code });
+        setCreatedBooking(result.booking);
+        setSelectedRide({
+          ...result.booking,
+          status: 'ongoing',
+          unlockCode: result.booking.unlockCode || code,
+          distance: 0,
+          fare: result.booking.pricing?.totalPayable,
+        });
+        setStep('ride-progress');
+      } catch (error) {
+        Alert.alert('Could not start ride', userApiErrorMessage(error));
+      } finally {
+        setBookingBusy(false);
+      }
+    })();
   };
 
   const handleRideEmergency = () => {
     Alert.alert('Emergency SOS', 'We have notified support for this ride.');
   };
 
-  const handlePauseResumeRide = () => {
-    Alert.alert('Ride Status', 'Ride controls are ready for live ride integration.');
-  };
-
   const handleEndRide = () => {
-    setStep('end-ride-station');
+    // Drop station is already chosen at booking time — go straight to
+    // parking confirmation instead of asking again.
+    setStep('parking-confirmation');
   };
 
-  const handleConfirmParking = async () => {
+  const handleConfirmParking = async (photo?: KycUploadFile | null) => {
     const bookingId = selectedRide?._id || createdBooking?._id;
     if (!token || !bookingId) {
       Alert.alert('Cannot complete ride', 'No active ride found.');
@@ -1148,9 +1439,21 @@ export default function App() {
     }
     try {
       setBookingBusy(true);
-      const result = await userApi.completeRide(token, bookingId, {
-        dropStationId: selectedDropStation?.id,
-      });
+
+      // Compress the parking proof photo before uploading (best-effort).
+      let parkingPhoto: KycUploadFile | null = null;
+      if (photo) {
+        try {
+          const compressed = await compressImage(photo.uri, photo.name, 'photo');
+          parkingPhoto = { uri: compressed.uri, name: photo.name, type: photo.type };
+        } catch {
+          parkingPhoto = photo;
+        }
+      }
+
+      // No dropStationId sent — the backend falls back to the drop station
+      // chosen at booking time, avoiding stale selections from older flows.
+      const result = await userApi.completeRide(token, bookingId, {}, parkingPhoto);
       setCreatedBooking(result.booking);
       setSelectedRide({
         ...result.booking,
@@ -1335,8 +1638,24 @@ export default function App() {
         }}
         onViewAll={() => setStep('search')}
         onReferPress={() => setStep('offers')}
-        onLocationPress={() => setStep('permissions')}
+        onLocationPress={() => setStep('edit-location')}
         onWalletPress={() => setStep('wallet')}
+      />
+    );
+  }
+
+  if (step === 'edit-location') {
+    return (
+      <EditLocationScreen
+        currentCity={user?.settings?.location?.city || user?.city || ''}
+        loading={loading}
+        onBack={() => setStep('dashboard')}
+        onSave={(city, state, coords) => {
+          void handleSaveLocation(city, state, coords);
+        }}
+        onUseCurrentLocation={() => {
+          void handleUseCurrentLocation();
+        }}
       />
     );
   }
@@ -1422,7 +1741,23 @@ export default function App() {
         bookings={bookings}
         loading={loading || bookingsLoading}
         activeTab={activeTab}
-        onStartRide={() => setStep('pre-ride')}
+        onStartRide={(booking) => {
+          setCreatedBooking(booking);
+          const status = (booking.status || '').toUpperCase();
+          if (status === 'ACTIVE' || status === 'ONGOING') {
+            // Ride already running on the backend — jump straight back in.
+            setSelectedRide({
+              ...booking,
+              status: 'ongoing',
+              distance: 0,
+              fare: booking.pricing?.totalPayable,
+            });
+            setStep('ride-progress');
+            return;
+          }
+          setSelectedRide(null);
+          setStep('pre-ride');
+        }}
         onCancelBooking={handleCancelBookingPress}
         onViewDetails={handleViewBookingDetails}
         onViewReceipt={handleViewBookingReceipt}
@@ -1450,12 +1785,19 @@ export default function App() {
         onStartRide={() => setStep('scan-qr')}
         scootyId={
           createdBooking?.scooter?.registrationNumber ||
-          (selectedPickupStation ? `SC${String(selectedPickupStation.id).padStart(3, '0')}` : 'Unavailable')
+          createdBooking?.vehicleId?.registrationNumber ||
+          'Unavailable'
         }
-        scootyBattery={0}
-        scootyRange={0}
-        farePerMinute={selectedRidePlan?.id === 'monthly' ? 2 : 3}
-        farePerKilometer={selectedRidePlan?.id === 'weekly' ? 6 : 8}
+        scootyModel={
+          createdBooking?.scooter?.modelName || createdBooking?.vehicleId?.modelName
+        }
+        scootyBattery={
+          createdBooking?.scooter?.batteryPercent ??
+          createdBooking?.vehicleId?.batteryPercent ??
+          null
+        }
+        planName={createdBooking?.planName}
+        totalPayable={createdBooking?.pricing?.totalPayable}
         walletBalance={dashboard?.walletBalance ?? 0}
       />
     );
@@ -1505,7 +1847,7 @@ export default function App() {
         onBack={() => setStep('profile')}
         onTabPress={handleTabPress}
         rides={rides}
-        loading={loading}
+        loading={ridesLoading}
         activeTab={activeTab}
         onOpenRide={(ride) => {
           setSelectedRide(ride);
@@ -1650,6 +1992,7 @@ export default function App() {
         dropStationName={selectedDropStation?.name}
         scheduleLabel={formatScheduleLabel(selectedTimeSlot)}
         estimatedTotal={bookingQuote?.pricing?.totalPayable || createdBooking?.pricing?.totalPayable || selectedRidePlan?.price}
+        pricing={bookingQuote?.pricing}
       />
     );
   }
@@ -1681,6 +2024,8 @@ export default function App() {
           setActiveTab('home');
           setStep('dashboard');
         }}
+        pending={createdBooking?.status === 'PENDING_PAYMENT'}
+        rideStartsIn={rideStartsInLabel(createdBooking?.startAt || bookingQuote?.schedule?.startAt)}
         bookingId={createdBooking?._id || 'Unavailable'}
         planType={createdBooking?.planName || selectedRidePlan?.title || 'Plan unavailable'}
         amount={createdBooking?.pricing?.totalPayable || bookingQuote?.pricing?.totalPayable || selectedRidePlan?.price}
@@ -1690,7 +2035,7 @@ export default function App() {
           createdBooking?.schedule?.startLabel && createdBooking?.schedule?.endLabel
             ? `${createdBooking.schedule.startLabel} - ${createdBooking.schedule.endLabel}`
             : selectedTimeSlot
-              ? `${selectedTimeSlot.time} - ${selectedTimeSlot.time}`
+              ? formatTime12(selectedTimeSlot.time)
               : undefined
         }
         duration={selectedTimeSlot?.duration || selectedRidePlan?.duration}
@@ -1703,7 +2048,7 @@ export default function App() {
   if (step === 'scan-qr') {
     return (
       <ScanQRCodeScreen
-        onBack={() => setStep('booking-confirmed')}
+        onBack={() => setStep('pre-ride')}
         onScanned={handleScannedCode}
         expectedCode={createdBooking?.unlockCode || selectedRide?.unlockCode || ''}
       />
@@ -1714,12 +2059,16 @@ export default function App() {
     return (
       <RideInProgressScreen
         onEmergency={handleRideEmergency}
-        onPauseResume={handlePauseResumeRide}
         onEndRide={handleEndRide}
-        rideTime={selectedRide?.schedule?.startLabel || '—'}
-        distance={selectedRide?.distance || 0}
-        battery={0}
-        speed={0}
+        planName={selectedRide?.planName || createdBooking?.planName || 'Plan unavailable'}
+        battery={
+          selectedRide?.scooter?.batteryPercent ??
+          createdBooking?.scooter?.batteryPercent ??
+          createdBooking?.vehicleId?.batteryPercent ??
+          null
+        }
+        startedAt={selectedRide?.rideStartedAt || createdBooking?.rideStartedAt || null}
+        endAt={selectedRide?.endAt || createdBooking?.endAt || null}
       />
     );
   }
@@ -1736,10 +2085,11 @@ export default function App() {
   if (step === 'parking-confirmation') {
     return (
       <ParkingConfirmationScreen
-        onBack={() => setStep('end-ride-station')}
+        onBack={() => setStep('ride-progress')}
         onRetakePhoto={() => undefined}
-        onConfirmParking={handleConfirmParking}
-        photoTaken={false}
+        onConfirmParking={(photo) => {
+          void handleConfirmParking(photo);
+        }}
       />
     );
   }

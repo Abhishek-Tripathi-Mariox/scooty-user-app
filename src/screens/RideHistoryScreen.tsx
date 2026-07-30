@@ -9,11 +9,8 @@ import {
 import Svg, { Path, Rect } from 'react-native-svg';
 import { AppBackground } from '../components/AppBackground';
 import { BottomTabs, type TabKey } from '../components/BottomTabs';
-import {
-  ArrowLeftIcon,
-  ClockIcon,
-  SmallScooterIcon,
-} from '../components/RideIcons';
+import { ScooterIcon } from '../components/HomeIcons';
+import { ArrowLeftIcon, ClockIcon } from '../components/RideIcons';
 import type { RideItem } from '../services/userApi';
 
 type HistoryRow = {
@@ -41,13 +38,27 @@ export function RideHistoryScreen({
   activeTab: TabKey;
   onOpenRide: (ride: RideItem) => void;
 }) {
+  const formatDuration = (r: RideItem): string => {
+    const minutes = r.actualDurationMinutes;
+    if (typeof minutes === 'number' && minutes > 0) {
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
+      return h > 0 ? `${h}h ${m}m` : `${m}m`;
+    }
+    return r.durationHours ? `${r.durationHours}h` : '—';
+  };
+
   const items: HistoryRow[] =
     rides && rides.length > 0
       ? rides.map((r, i) => ({
           id: r._id || `r${i}`,
-          label: r._id?.toUpperCase().slice(0, 7) || `RIDE00${i + 1}`,
-          dateTime: r.schedule?.startLabel || '—',
-          duration: r.durationHours ? `${r.durationHours}h` : '—',
+          label:
+            r.scooter?.registrationNumber ||
+            (r._id ? `RIDE-${r._id.slice(-4).toUpperCase()}` : `RIDE00${i + 1}`),
+          dateTime: [r.schedule?.dateLabel, r.schedule?.startLabel]
+            .filter(Boolean)
+            .join(' • ') || '—',
+          duration: formatDuration(r),
           distance: r.distance != null ? `${r.distance.toFixed(1)} km` : '—',
           amount: r.pricing?.totalPayable ?? r.fare ?? 0,
           status: r.status?.toLowerCase() === 'cancelled' ? 'Penalty' : 'Completed',
@@ -79,7 +90,7 @@ export function RideHistoryScreen({
             >
               <View style={styles.topRow}>
                 <View style={styles.iconTile}>
-                  <SmallScooterIcon size={22} color="#fc4c02" />
+                  <ScooterIcon size={24} color="#fc4c02" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rideLabel}>{item.label}</Text>

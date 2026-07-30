@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="launch_orange">#fdebd6</color>
+    <!-- Sampled from the top and bottom rows of userbackground.png so the
+         system bars blend seamlessly with the app background. -->
+    <color name="app_background_top">#fff1e7</color>
+    <color name="app_background_bottom">#e6dde1</color>
 </resources>
