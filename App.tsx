@@ -55,6 +55,7 @@ import {
   User,
   userApi,
   userApiErrorMessage,
+  userApiIsNetworkError,
 } from './src/services/userApi';
 import { fetchCoordsIfAllowed } from './src/utils/location';
 import { formatCurrency, formatTime12 } from './src/utils/format';
@@ -484,7 +485,12 @@ export default function App() {
 
         setStep('permissions');
       } catch (error) {
-        await clearAuthToken();
+        // Only drop the saved session when the token is actually invalid.
+        // A network failure (backend down / no internet) must not log the
+        // user out, or auto-login after admin approval would silently break.
+        if (!userApiIsNetworkError(error)) {
+          await clearAuthToken();
+        }
         console.warn('Failed to restore user session:', error);
       } finally {
         if (active) {
@@ -516,10 +522,10 @@ export default function App() {
       if (inFlight) return;
       inFlight = true;
       try {
-        const kycStatus = await refreshKycStatus(token);
+        const freshUser = await refreshKycStatus(token);
         if (!active) return;
-        if (kycStatus === 'APPROVED') {
-          if (hasCompletedPermissions(user?.settings)) {
+        if (freshUser?.kycStatus === 'APPROVED') {
+          if (hasCompletedPermissions(freshUser.settings)) {
             setActiveTab('home');
             setStep('dashboard');
           } else {
@@ -1041,7 +1047,7 @@ export default function App() {
       const result = await userApi.profile(sessionToken);
       setUser(result.user);
       setDashboard(result.dashboard);
-      return result.user?.kycStatus;
+      return result.user;
     } catch {
       return undefined;
     }

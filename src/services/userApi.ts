@@ -774,3 +774,8 @@ export const userApiErrorMessage = (error: unknown): string => {
   }
   return 'Something went wrong';
 };
+
+// True when the request never reached the backend (offline / server down),
+// as opposed to the backend rejecting the request (e.g. invalid token).
+export const userApiIsNetworkError = (error: unknown): boolean =>
+  error instanceof ApiError && /cannot reach api/i.test(error.message || '');
