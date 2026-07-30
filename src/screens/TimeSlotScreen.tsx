@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Modal,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -34,9 +35,18 @@ export function TimeSlotScreen({
   slots?: TimeSlotItem[] | null;
 }) {
   const selectedPlan = plan || DEFAULT_PLAN;
-  const dates = useMemo(() => buildDateOptions(), []);
-  const [selectedDate, setSelectedDate] = useState(dates[1]?.id || 'tomorrow');
+  const baseDates = useMemo(() => buildDateOptions(), []);
+  const [customDate, setCustomDate] = useState<{ id: string; label: string } | null>(null);
+  const [selectedDate, setSelectedDate] = useState(baseDates[1]?.id || 'tomorrow');
   const [selectedTime, setSelectedTime] = useState('10:00');
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const dates = useMemo(() => {
+    if (customDate && !baseDates.some((d) => d.id === customDate.id)) {
+      return [...baseDates, customDate];
+    }
+    return baseDates;
+  }, [baseDates, customDate]);
 
   const availableTimeSlots = useMemo(
     () =>
@@ -76,6 +86,17 @@ export function TimeSlotScreen({
         showsVerticalScrollIndicator={false}
       >
         <SectionHeader icon={<CalendarIcon size={18} color="#fc4c02" />} label="Select Date" />
+        <Pressable
+          style={styles.dateField}
+          onPress={() => setPickerOpen(true)}
+          hitSlop={6}
+        >
+          <CalendarIcon size={18} color="#fc4c02" />
+          <Text style={styles.dateFieldText} numberOfLines={1}>
+            {selectedDateLabel}
+          </Text>
+          <Text style={styles.dateFieldHint}>Tap to change</Text>
+        </Pressable>
         <View style={styles.dateRow}>
           {dates.map((item) => (
             <Chip
@@ -130,6 +151,16 @@ export function TimeSlotScreen({
           height={56}
         />
       </View>
+
+      <CalendarPickerModal
+        visible={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(iso, label) => {
+          setCustomDate({ id: iso, label });
+          setSelectedDate(iso);
+          setPickerOpen(false);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -185,6 +216,116 @@ function SummaryRow({ label, value, accent }: { label: string; value: string; ac
       <Text style={styles.summaryLabel}>{label}</Text>
       <Text style={[styles.summaryValue, accent && styles.summaryAccent]}>{value}</Text>
     </View>
+  );
+}
+
+function CalendarPickerModal({
+  visible,
+  onClose,
+  onSelect,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onSelect: (iso: string, label: string) => void;
+}) {
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+  const [viewMonth, setViewMonth] = useState({
+    year: today.getFullYear(),
+    month: today.getMonth(),
+  });
+
+  const monthName = new Date(viewMonth.year, viewMonth.month, 1).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  });
+  const firstDay = new Date(viewMonth.year, viewMonth.month, 1);
+  const daysInMonth = new Date(viewMonth.year, viewMonth.month + 1, 0).getDate();
+  const startWeekday = firstDay.getDay();
+  const cells: Array<number | null> = [
+    ...Array.from({ length: startWeekday }, () => null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const goPrev = () => {
+    setViewMonth((vm) =>
+      vm.month === 0 ? { year: vm.year - 1, month: 11 } : { year: vm.year, month: vm.month - 1 },
+    );
+  };
+  const goNext = () => {
+    setViewMonth((vm) =>
+      vm.month === 11 ? { year: vm.year + 1, month: 0 } : { year: vm.year, month: vm.month + 1 },
+    );
+  };
+
+  const canGoPrev =
+    viewMonth.year > today.getFullYear() ||
+    (viewMonth.year === today.getFullYear() && viewMonth.month > today.getMonth());
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={styles.modalBackdrop} onPress={onClose}>
+        <Pressable style={styles.modalCard} onPress={() => {}}>
+          <View style={styles.modalHeader}>
+            <Pressable
+              onPress={canGoPrev ? goPrev : undefined}
+              disabled={!canGoPrev}
+              style={[styles.monthNav, !canGoPrev && styles.monthNavDisabled]}
+            >
+              <Text style={styles.monthNavText}>‹</Text>
+            </Pressable>
+            <Text style={styles.modalTitle}>{monthName}</Text>
+            <Pressable onPress={goNext} style={styles.monthNav}>
+              <Text style={styles.monthNavText}>›</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.weekRow}>
+            {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+              <Text key={`${d}-${i}`} style={styles.weekDay}>
+                {d}
+              </Text>
+            ))}
+          </View>
+
+          <View style={styles.dayGrid}>
+            {cells.map((day, idx) => {
+              if (day === null) {
+                return <View key={`empty-${idx}`} style={styles.dayCell} />;
+              }
+              const cellDate = new Date(viewMonth.year, viewMonth.month, day);
+              cellDate.setHours(0, 0, 0, 0);
+              const isPast = cellDate.getTime() < today.getTime();
+              const isToday = cellDate.getTime() === today.getTime();
+              return (
+                <Pressable
+                  key={`day-${day}`}
+                  disabled={isPast}
+                  style={[styles.dayCell, isPast && styles.dayCellDisabled]}
+                  onPress={() => {
+                    const iso = cellDate.toISOString().slice(0, 10);
+                    const label = cellDate.toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      day: 'numeric',
+                      month: 'short',
+                    });
+                    onSelect(iso, label);
+                  }}
+                >
+                  <Text style={[styles.dayText, isPast && styles.dayTextDisabled, isToday && styles.dayTextToday]}>
+                    {day}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -272,6 +413,29 @@ const styles = StyleSheet.create({
   },
   sectionSpacer: {
     height: 20,
+  },
+  dateField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: 52,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderWidth: 1,
+    borderColor: '#fc4c02',
+  },
+  dateFieldText: {
+    flex: 1,
+    color: '#0f172a',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  dateFieldHint: {
+    color: '#fc4c02',
+    fontSize: 12,
+    fontWeight: '600',
   },
   dateRow: {
     flexDirection: 'row',
@@ -365,5 +529,82 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderTopWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.62)',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    padding: 18,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    color: '#0f172a',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  monthNav: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff5ed',
+  },
+  monthNavDisabled: {
+    opacity: 0.3,
+  },
+  monthNavText: {
+    color: '#fc4c02',
+    fontSize: 22,
+    lineHeight: 22,
+    fontWeight: '700',
+  },
+  weekRow: {
+    flexDirection: 'row',
+    marginBottom: 6,
+  },
+  weekDay: {
+    flex: 1,
+    textAlign: 'center',
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dayGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  dayCell: {
+    width: `${100 / 7}%`,
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayCellDisabled: {
+    opacity: 0.3,
+  },
+  dayText: {
+    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  dayTextDisabled: {
+    color: '#94a3b8',
+  },
+  dayTextToday: {
+    color: '#fc4c02',
+    fontWeight: '700',
   },
 });

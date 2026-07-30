@@ -13,7 +13,7 @@ import { ArrowLeftIcon } from '../components/RideIcons';
 import { formatCurrency } from '../utils/format';
 import { useStyles } from '../utils/responsiveStyles';
 
-export type PaymentMethodId = 'CASH' | 'WALLET';
+export type PaymentMethodId = 'CASH' | 'WALLET' | 'UPI' | 'NETBANKING';
 
 type PayOption = {
   id: PaymentMethodId;
@@ -40,6 +40,22 @@ const OPTIONS: PayOption[] = [
     iconBg: '#ffedd5',
     iconColor: '#fc4c02',
     iconChar: 'W',
+  },
+  {
+    id: 'UPI',
+    label: 'UPI',
+    description: 'Google Pay, PhonePe, Paytm & other UPI apps',
+    iconBg: '#e0f2fe',
+    iconColor: '#0284c7',
+    iconChar: 'U',
+  },
+  {
+    id: 'NETBANKING',
+    label: 'Online Banking',
+    description: 'Net banking from all major banks',
+    iconBg: '#ede9fe',
+    iconColor: '#6d28d9',
+    iconChar: 'B',
   },
 ];
 

@@ -36,6 +36,7 @@ import { BookingReceiptScreen } from './src/screens/BookingReceiptScreen';
 import { PreRideScreen } from './src/screens/PreRideScreen';
 import { RideCancelScreen } from './src/screens/RideCancelScreen';
 import { SplashScreen } from './src/screens/SplashScreen';
+import { CityPickerScreen } from './src/screens/CityPickerScreen';
 import { AuthStep, OTP_LENGTH } from './src/constants/auth';
 import type { TabKey } from './src/components/BottomTabs';
 import {
@@ -61,6 +62,7 @@ import { compressImage } from './src/utils/image-compression';
 
 type AppStep =
   | 'splash'
+  | 'city-picker'
   | AuthStep
   | 'register'
   | 'kyc'
@@ -112,6 +114,36 @@ const mapRidePlanIdToPlanCode = (id?: RidePlanId | null) => {
 
 // Stations are only shown within this distance of the selected location.
 const STATION_RADIUS_KM = 20;
+
+const canStartScheduledRide = (booking?: BookingItem | null) => {
+  const scheduledStartAt = booking?.startAt || booking?.schedule?.startAt;
+  if (!scheduledStartAt) return true;
+
+  const startMs = new Date(scheduledStartAt).getTime();
+  if (Number.isNaN(startMs)) return true;
+
+  return Date.now() >= startMs;
+};
+
+const normalizeBookingResponse = (booking?: BookingItem | null): BookingItem | null => {
+  if (!booking) return booking ?? null;
+
+  return {
+    ...booking,
+    pickupStation: booking.pickupStation || booking.pickupStationId,
+    dropStation: booking.dropStation || booking.dropStationId,
+    scooter:
+      booking.scooter ||
+      (booking.vehicleId
+        ? {
+            id: booking.vehicleId._id,
+            modelName: booking.vehicleId.modelName,
+            registrationNumber: booking.vehicleId.registrationNumber,
+            imageUrl: booking.vehicleId.photos?.sideUrl || booking.vehicleId.photos?.frontUrl,
+          }
+        : undefined),
+  };
+};
 
 const AUTH_TOKEN_KEY = 'scooty_rental_user_auth_token';
 const UserAuthStorage = NativeModules.UserAuthStorage as
@@ -293,10 +325,21 @@ export default function App() {
 
   // UI state
   const [activeTab, setActiveTab] = useState<TabKey>('home');
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+
+  const visibleStations = useMemo(() => {
+    if (!stations) return null;
+    if (!selectedCity) return stations;
+    const cityFilter = selectedCity.split(',')[0].trim().toLowerCase();
+    return stations.filter((s) => (s.city || '').toLowerCase().includes(cityFilter));
+  }, [stations, selectedCity]);
 
   const pickupStations = useMemo(
-    () => stations?.map((station, index) => mapStationToPickupStation(station, String(index + 1))) ?? null,
-    [stations],
+    () =>
+      visibleStations?.map((station, index) =>
+        mapStationToPickupStation(station, String(index + 1)),
+      ) ?? null,
+    [visibleStations],
   );
 
   const persistAuthToken = async (value: string) => {
@@ -1277,7 +1320,9 @@ export default function App() {
 
   const buildBookingDate = (selection: string) => resolveBookingDate(selection);
 
-  const handleConfirmBooking = async (paymentMethodId: 'CASH' | 'WALLET' = 'CASH') => {
+  const handleConfirmBooking = async (
+    paymentMethodId: 'CASH' | 'WALLET' | 'UPI' | 'NETBANKING' = 'CASH',
+  ) => {
     if (!token || !selectedRidePlan || !selectedPickupStation || !selectedDropStation || !selectedTimeSlot) {
       Alert.alert('Missing details', 'Please choose a plan, time slot, pickup station, and drop station before continuing.');
       return;
@@ -1332,7 +1377,8 @@ export default function App() {
         // Bookings wait for station admin approval before getting confirmed.
         autoConfirm: false,
       });
-      setCreatedBooking(bookingResult.booking);
+      const normalizedBooking = normalizeBookingResponse(bookingResult.booking);
+      setCreatedBooking(normalizedBooking);
 
       const [profileResult, ridesResult, dashboardResult, notificationsResult, transactionsResult] = await Promise.all([
         userApi.profile(token),
@@ -1347,22 +1393,22 @@ export default function App() {
       setNotifications(notificationsResult.notifications);
       setTransactions(transactionsResult.transactions || []);
       setSelectedRide({
-        _id: bookingResult.booking._id,
+        _id: normalizedBooking?._id || bookingResult.booking._id,
         status: 'ongoing',
-        planCode: bookingResult.booking.planCode,
-        planName: bookingResult.booking.planName,
-        date: bookingResult.booking.date,
-        startAt: bookingResult.booking.startAt,
-        endAt: bookingResult.booking.endAt,
-        durationHours: bookingResult.booking.durationHours,
-        pricing: bookingResult.booking.pricing,
-        payment: bookingResult.booking.payment,
-        pickupStation: bookingResult.booking.pickupStation,
-        dropStation: bookingResult.booking.dropStation,
-        scooter: bookingResult.booking.scooter,
-        schedule: bookingResult.booking.schedule,
+        planCode: normalizedBooking?.planCode || bookingResult.booking.planCode,
+        planName: normalizedBooking?.planName || bookingResult.booking.planName,
+        date: normalizedBooking?.date || bookingResult.booking.date,
+        startAt: normalizedBooking?.startAt || bookingResult.booking.startAt,
+        endAt: normalizedBooking?.endAt || bookingResult.booking.endAt,
+        durationHours: normalizedBooking?.durationHours || bookingResult.booking.durationHours,
+        pricing: normalizedBooking?.pricing || bookingResult.booking.pricing,
+        payment: normalizedBooking?.payment || bookingResult.booking.payment,
+        pickupStation: normalizedBooking?.pickupStation || bookingResult.booking.pickupStation,
+        dropStation: normalizedBooking?.dropStation || bookingResult.booking.dropStation,
+        scooter: normalizedBooking?.scooter || bookingResult.booking.scooter,
+        schedule: normalizedBooking?.schedule || bookingResult.booking.schedule,
         distance: 0,
-        fare: bookingResult.booking.pricing?.totalPayable,
+        fare: normalizedBooking?.pricing?.totalPayable || bookingResult.booking.pricing?.totalPayable,
       });
 
       setStep('booking-confirmed');
@@ -1376,8 +1422,16 @@ export default function App() {
   // Start Ride always goes through the full flow:
   // Confirm Ride (pre-ride) → Scan QR → ride starts.
   const handleStartRide = () => {
-    if (!createdBooking?._id && !selectedRide?._id) {
+    const currentBooking = createdBooking || selectedRide;
+    if (!currentBooking?._id) {
       Alert.alert('Cannot start ride', 'Booking is not ready yet. Please try again.');
+      return;
+    }
+    if (!canStartScheduledRide(currentBooking)) {
+      Alert.alert(
+        'Ride not started yet',
+        'This booking is scheduled for a future time. You can start it only when the booked time begins.',
+      );
       return;
     }
     setStep('pre-ride');
@@ -1619,10 +1673,44 @@ export default function App() {
     );
   }
 
+  if (step === 'city-picker') {
+    const currentCity =
+      selectedCity || user?.settings?.location?.city || user?.city || undefined;
+    return (
+      <CityPickerScreen
+        onBack={() => setStep('dashboard')}
+        currentCity={currentCity}
+        onSelect={(city) => {
+          setSelectedCity(city);
+          setStep('dashboard');
+          if (token) {
+            const cityName = city.split(',')[0].trim();
+            setLoading(true);
+            userApi
+              .stations(token, { city: cityName })
+              .then((result) => setStations(result.stations || []))
+              .catch((err) => console.warn('Failed to load stations for city:', err))
+              .finally(() => setLoading(false));
+          }
+        }}
+      />
+    );
+  }
+
   if (step === 'dashboard') {
+    const homeUser = selectedCity && user
+      ? ({
+          ...user,
+          city: selectedCity,
+          settings: {
+            ...(user.settings || {}),
+            location: { ...(user.settings?.location || {}), city: selectedCity },
+          },
+        } as typeof user)
+      : user;
     return (
       <HomeScreen
-        user={user}
+        user={homeUser}
         dashboard={dashboard}
         stations={pickupStations}
         loading={loading}
@@ -1664,7 +1752,7 @@ export default function App() {
     return (
       <SearchScreen
         onBack={() => setStep('dashboard')}
-        stations={stations}
+        stations={visibleStations}
         loading={loading}
         selectedStationId={selectedSearchStationId}
         onSelectStation={(station) => {
@@ -2015,25 +2103,27 @@ export default function App() {
   }
 
   if (step === 'booking-confirmed') {
+    const currentBooking = createdBooking || selectedRide;
     return (
       <BookingConfirmedScreen
         onBack={() => setStep('confirm-ride')}
         onStartRide={handleStartRide}
+        canStartRide={canStartScheduledRide(currentBooking)}
         onViewDetails={() => setStep('bookings')}
         onBackHome={() => {
           setActiveTab('home');
           setStep('dashboard');
         }}
         pending={createdBooking?.status === 'PENDING_PAYMENT'}
-        rideStartsIn={rideStartsInLabel(createdBooking?.startAt || bookingQuote?.schedule?.startAt)}
-        bookingId={createdBooking?._id || 'Unavailable'}
-        planType={createdBooking?.planName || selectedRidePlan?.title || 'Plan unavailable'}
-        amount={createdBooking?.pricing?.totalPayable || bookingQuote?.pricing?.totalPayable || selectedRidePlan?.price}
-        pickupStationName={createdBooking?.pickupStation?.name || selectedPickupStation?.name}
-        dropStationName={createdBooking?.dropStation?.name || selectedRide?.dropStation?.name}
+        rideStartsIn={rideStartsInLabel(currentBooking?.startAt || bookingQuote?.schedule?.startAt)}
+        bookingId={currentBooking?._id || 'Unavailable'}
+        planType={currentBooking?.planName || selectedRidePlan?.title || 'Plan unavailable'}
+        amount={currentBooking?.pricing?.totalPayable || bookingQuote?.pricing?.totalPayable || selectedRidePlan?.price}
+        pickupStationName={currentBooking?.pickupStation?.name || selectedPickupStation?.name}
+        dropStationName={currentBooking?.dropStation?.name || selectedRide?.dropStation?.name}
         timeSlot={
-          createdBooking?.schedule?.startLabel && createdBooking?.schedule?.endLabel
-            ? `${createdBooking.schedule.startLabel} - ${createdBooking.schedule.endLabel}`
+          currentBooking?.schedule?.startLabel && currentBooking?.schedule?.endLabel
+            ? `${currentBooking.schedule.startLabel} - ${currentBooking.schedule.endLabel}`
             : selectedTimeSlot
               ? formatTime12(selectedTimeSlot.time)
               : undefined
