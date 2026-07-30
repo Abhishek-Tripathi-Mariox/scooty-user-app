@@ -33,6 +33,7 @@ export function ConfirmRideScreen({
   pickupStationName,
   scheduleLabel,
   estimatedTotal,
+  pricing,
 }: {
   onBack: () => void;
   onConfirm: () => void;
@@ -48,12 +49,23 @@ export function ConfirmRideScreen({
   dropStationName?: string;
   scheduleLabel?: string;
   estimatedTotal?: number;
+  pricing?: {
+    baseFare?: number;
+    securityDeposit?: number;
+    convenienceFee?: number;
+    tax?: number;
+    discount?: number;
+    totalPayable?: number;
+  };
 }) {
-  const rideFare = estimatedTotal ?? 0;
-  const taxes = Math.round(rideFare * 0.18);
-  const subtotal = 0;
-  const deposit = 1000;
-  const totalPayable = rideFare + taxes + subtotal + deposit;
+  // Real amounts come from the backend quote; nothing is computed locally.
+  const rideFare = pricing?.baseFare ?? estimatedTotal ?? 0;
+  const convenienceFee = pricing?.convenienceFee ?? 0;
+  const taxes = pricing?.tax ?? 0;
+  const discount = pricing?.discount ?? 0;
+  const deposit = pricing?.securityDeposit ?? 0;
+  const subtotal = rideFare + convenienceFee + taxes;
+  const totalPayable = pricing?.totalPayable ?? Math.max(0, subtotal + deposit - discount);
   const walletAvailable = 0;
   const scheduleText = scheduleLabel || 'Schedule unavailable';
   const styles = useStyles(RAW_STYLES);
@@ -111,7 +123,9 @@ export function ConfirmRideScreen({
         <Card>
           <CardTitle icon={<ReceiptIcon size={22} color="#16a34a" />} text="Cost Breakdown" bold />
           <CostRow label="Ride Fare" value={`₹${rideFare}`} />
-          <CostRow label="Taxes (GST 18%)" value={`₹${taxes}`} />
+          <CostRow label="Convenience Fee" value={`₹${convenienceFee}`} />
+          <CostRow label="Taxes (GST)" value={`₹${taxes}`} />
+          {discount > 0 ? <CostRow label="Discount" value={`-₹${discount}`} /> : null}
           <View style={styles.costDivider} />
           <CostRow label="Subtotal" value={`₹${subtotal}`} boldLabel boldValue />
           <View style={styles.costDivider} />

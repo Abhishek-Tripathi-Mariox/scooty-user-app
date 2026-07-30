@@ -11,6 +11,12 @@ type NotifRow = {
   message: string;
   time: string;
   kind: 'reminder' | 'message' | 'confirm' | 'offer';
+  unread: boolean;
+};
+
+type NotifGroup = {
+  label: string;
+  items: NotifRow[];
 };
 
 export function NotificationScreen({
@@ -26,16 +32,7 @@ export function NotificationScreen({
   loading?: boolean;
   activeTab: TabKey;
 }) {
-  const items: NotifRow[] =
-    notifications && notifications.length > 0
-      ? notifications.map((n) => ({
-          id: n._id,
-          title: n.title,
-          message: n.message,
-          time: n.createdAt ? timeAgo(n.createdAt) : '—',
-          kind: mapKind(n.type),
-        }))
-      : [];
+  const groups: NotifGroup[] = buildGroups(notifications || []);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -49,28 +46,33 @@ export function NotificationScreen({
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.sectionTitle}>Today</Text>
         {loading ? (
           <Text style={styles.emptyText}>Loading notifications...</Text>
-        ) : items.length === 0 ? (
-          <Text style={styles.emptyText}>No live notifications yet.</Text>
+        ) : groups.length === 0 ? (
+          <Text style={styles.emptyText}>No notifications yet.</Text>
         ) : (
-          <View style={styles.list}>
-            {items.map((n) => (
-              <View key={n.id} style={styles.row}>
-                <View style={[styles.iconWrap, iconBg(n.kind)]}>
-                  <NotifIcon kind={n.kind} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.titleRow}>
-                    <Text style={styles.title}>{n.title}</Text>
-                    <Text style={styles.time}>{n.time}</Text>
+          groups.map((group) => (
+            <View key={group.label}>
+              <Text style={styles.sectionTitle}>{group.label}</Text>
+              <View style={styles.list}>
+                {group.items.map((n) => (
+                  <View key={n.id} style={styles.row}>
+                    <View style={[styles.iconWrap, iconBg(n.kind)]}>
+                      <NotifIcon kind={n.kind} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={styles.titleRow}>
+                        {n.unread ? <View style={styles.unreadDot} /> : null}
+                        <Text style={styles.title}>{n.title}</Text>
+                        <Text style={styles.time}>{n.time}</Text>
+                      </View>
+                      <Text style={styles.message}>{n.message}</Text>
+                    </View>
                   </View>
-                  <Text style={styles.message}>{n.message}</Text>
-                </View>
+                ))}
               </View>
-            ))}
-          </View>
+            </View>
+          ))
         )}
       </ScrollView>
 
@@ -125,21 +127,62 @@ function iconBg(kind: NotifRow['kind']) {
   return { backgroundColor: '#ffe2e2' };
 }
 
-function mapKind(type?: string): NotifRow['kind'] {
-  const t = (type || '').toLowerCase();
-  if (t.includes('reminder')) return 'reminder';
-  if (t.includes('message') || t.includes('chat')) return 'message';
-  if (t.includes('confirm') || t.includes('success') || t.includes('order')) return 'confirm';
-  return 'offer';
+function mapKind(type?: string, title?: string): NotifRow['kind'] {
+  const t = `${type || ''} ${title || ''}`.toLowerCase();
+  // Backend types: RIDE (bookings/rides), SYSTEM, ALERT, PROMO...
+  if (t.includes('cancel') || t.includes('alert')) return 'reminder';
+  if (t.includes('ride') || t.includes('booking') || t.includes('confirm') || t.includes('complete'))
+    return 'confirm';
+  if (t.includes('promo') || t.includes('offer') || t.includes('reward') || t.includes('referral'))
+    return 'offer';
+  if (t.includes('message') || t.includes('support') || t.includes('chat')) return 'message';
+  return 'reminder';
 }
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
   if (mins < 60) return `${mins}min`;
   const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} hr`;
-  return `${Math.floor(hrs / 24)}d`;
+  if (hrs < 24) return `${hrs}hr`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d`;
+  return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+}
+
+function buildGroups(notifications: NotificationItem[]): NotifGroup[] {
+  const sorted = [...notifications].sort(
+    (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime(),
+  );
+
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+
+  const groups: NotifGroup[] = [
+    { label: 'Today', items: [] },
+    { label: 'Yesterday', items: [] },
+    { label: 'Earlier', items: [] },
+  ];
+
+  sorted.forEach((n) => {
+    const created = n.createdAt ? new Date(n.createdAt).getTime() : 0;
+    const row: NotifRow = {
+      id: n._id,
+      title: n.title,
+      message: n.message,
+      time: n.createdAt ? timeAgo(n.createdAt) : '—',
+      kind: mapKind(n.type, n.title),
+      unread: n.isRead === false,
+    };
+    if (created >= startOfToday.getTime()) groups[0].items.push(row);
+    else if (created >= startOfYesterday.getTime()) groups[1].items.push(row);
+    else groups[2].items.push(row);
+  });
+
+  return groups.filter((g) => g.items.length > 0);
 }
 
 const styles = StyleSheet.create({
@@ -184,9 +227,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 22,
     marginBottom: 16,
+    marginTop: 8,
   },
   list: {
     gap: 20,
+    marginBottom: 12,
+  },
+  unreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#fc4c02',
+    marginRight: 2,
   },
   emptyText: {
     color: '#4a5565',
@@ -222,7 +274,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   time: {
-    color: '#d9d9d9',
+    color: '#9ca3af',
     fontSize: 12,
     lineHeight: 16,
   },

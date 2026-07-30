@@ -13,10 +13,10 @@ import { GradientButton } from '../components/GradientButton';
 import { GradientFill } from '../components/GradientFill';
 import { ArrowLeftIcon, CalendarIcon, ClockIcon } from '../components/RideIcons';
 import type { TimeSlotItem } from '../services/userApi';
+import { formatCurrency, formatTime12 } from '../utils/format';
 import type { RidePlan } from './RidePlanScreen';
 
 const TIME_SLOTS = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'];
-const DURATIONS = ['1h', '2h', '3h', '4h', '6h', '8h', '12h', '24h'];
 
 type DateOption = {
   id: string;
@@ -39,7 +39,6 @@ export function TimeSlotScreen({
   const [customDate, setCustomDate] = useState<{ id: string; label: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState(baseDates[1]?.id || 'tomorrow');
   const [selectedTime, setSelectedTime] = useState('10:00');
-  const [selectedDuration, setSelectedDuration] = useState('2h');
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const dates = useMemo(() => {
@@ -53,7 +52,7 @@ export function TimeSlotScreen({
     () =>
       slots && slots.length > 0
         ? slots
-        : TIME_SLOTS.map((slot) => ({ label: slot, value: slot, disabled: false })),
+        : TIME_SLOTS.map((slot) => ({ label: formatTime12(slot), value: slot, disabled: false })),
     [slots],
   );
 
@@ -66,8 +65,9 @@ export function TimeSlotScreen({
   }, [availableTimeSlots, selectedTime]);
 
   const selectedDateLabel = dates.find((d) => d.id === selectedDate)?.label || 'Tomorrow';
-  const estimatedHours = Number(selectedDuration.replace(/[^\d]/g, '')) || 1;
-  const estimatedCost = selectedPlan.price * estimatedHours;
+  const selectedTimeLabel =
+    availableTimeSlots.find((slot) => slot.value === selectedTime)?.label ||
+    formatTime12(selectedTime);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -126,26 +126,14 @@ export function TimeSlotScreen({
           ))}
         </View>
 
-        <View style={styles.sectionSpacer} />
-        <SectionHeader icon={<ClockIcon size={18} color="#fc4c02" />} label="Duration (Hours)" />
-        <View style={styles.grid}>
-          {DURATIONS.map((d) => (
-            <Chip
-              key={d}
-              label={d}
-              active={selectedDuration === d}
-              onPress={() => setSelectedDuration(d)}
-              height={41}
-              fontSize={12.25}
-            />
-          ))}
-        </View>
-
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Booking Summary</Text>
-          <SummaryRow label="Start" value={`${selectedDateLabel}, ${selectedTime}`} />
-          <SummaryRow label="Duration" value={`${estimatedHours} ${estimatedHours === 1 ? 'hour' : 'hours'}`} />
-          <SummaryRow label="Estimated Cost" value={`₹${estimatedCost}`} accent />
+          <SummaryRow label="Start" value={`${selectedDateLabel}, ${selectedTimeLabel}`} />
+          <SummaryRow label="Duration" value={selectedPlan.duration} />
+          <SummaryRow label="Plan Price" value={formatCurrency(selectedPlan.price)} accent />
+          <Text style={styles.summaryHint}>
+            Security deposit, convenience fee & taxes will be added on the confirmation screen.
+          </Text>
         </View>
       </ScrollView>
 
@@ -153,7 +141,12 @@ export function TimeSlotScreen({
         <GradientButton
           label="Continue"
           onPress={() =>
-            onContinue({ date: selectedDate, time: selectedTime, duration: selectedDuration, plan: selectedPlan })
+            onContinue({
+              date: selectedDate,
+              time: selectedTime,
+              duration: selectedPlan.duration,
+              plan: selectedPlan,
+            })
           }
           height={56}
         />
@@ -518,6 +511,12 @@ const styles = StyleSheet.create({
   summaryAccent: {
     color: '#fc4c02',
     fontWeight: '600',
+  },
+  summaryHint: {
+    marginTop: 4,
+    color: '#64748b',
+    fontSize: 11,
+    lineHeight: 15,
   },
   footer: {
     position: 'absolute',

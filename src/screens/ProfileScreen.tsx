@@ -20,7 +20,12 @@ const RideHistoryIcon = require('../assets/images/ridehistory.png');
 const OfferIcon = require('../assets/images/offer.png');
 const HelpIcon = require('../assets/images/help.png');
 
-type ProfileMenuKey = 'bookings' | 'history' | 'offers' | 'support';
+type ProfileMenuKey = 'language' | 'bookings' | 'history' | 'offers' | 'support';
+
+const LANGUAGE_LABELS: Record<string, string> = {
+  en: 'English',
+  hi: 'Hindi',
+};
 
 type ProfileMenuItem = {
   key: ProfileMenuKey;
@@ -85,6 +90,19 @@ export function ProfileScreen({
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+        <Pressable style={styles.languageCard} onPress={() => onMenuPress?.('language')}>
+          <View style={styles.menuIconWrap}>
+            <GlobeIcon color="#2563eb" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.menuTitle}>Language</Text>
+            <Text style={styles.menuSubtitle}>
+              {LANGUAGE_LABELS[user?.settings?.language || 'en'] || 'English'}
+            </Text>
+          </View>
+          <ChevronRightIcon color="#9ca3af" />
+        </Pressable>
+
         <View style={styles.menuCard}>
           {menu.map((m, i) => (
             <View key={m.key}>
@@ -124,6 +142,23 @@ function MenuRow({ item, onPress }: { item: ProfileMenuItem; onPress: () => void
       </View>
       <ChevronRightIcon color="#9ca3af" />
     </Pressable>
+  );
+}
+
+function GlobeIcon({ color }: { color: string }) {
+  return (
+    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z"
+        stroke={color}
+        strokeWidth={1.8}
+      />
+      <Path
+        d="M12 2c2.5 2.6 3.9 6.1 3.9 10S14.5 19.4 12 22c-2.5-2.6-3.9-6.1-3.9-10S9.5 4.6 12 2ZM2.6 8.8h18.8M2.6 15.2h18.8"
+        stroke={color}
+        strokeWidth={1.8}
+      />
+    </Svg>
   );
 }
 
@@ -168,13 +203,11 @@ const RAW_STYLES = {
     backgroundColor: '#ffd1b0',
   },
   header: {
-    height: 56,
+    height: 54,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.26)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255, 255, 255, 0.6)',
   },
   backButton: {
     width: 40,
@@ -186,9 +219,9 @@ const RAW_STYLES = {
   headerTitle: {
     color: '#1C1C1E',
     fontFamily: 'Poppins',
-    fontSize: 20,
+    fontSize: 24,
     fontStyle: 'normal',
-    fontWeight: '600',
+    fontWeight: '700',
     lineHeight: 32,
   },
   profileCard: {
@@ -201,30 +234,30 @@ const RAW_STYLES = {
     borderColor: 'rgba(255, 255, 255, 0.62)',
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
-    paddingTop: 24,
-    paddingBottom: 24,
+    paddingTop: 14,
+    paddingBottom: 16,
     paddingHorizontal: 24,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
     backgroundColor: '#363636',
   },
   profileText: {
     flex: 1,
-    gap: 4,
+    gap: 3,
   },
   name: {
-    color: '#363636',
-    fontSize: 18,
+    color: '#1c1c1e',
+    fontSize: 20,
     fontWeight: '700',
-    lineHeight: 26,
+    lineHeight: 27,
   },
   meta: {
-    color: '#363636',
-    fontSize: 14,
-    lineHeight: 20,
+    color: '#4b5563',
+    fontSize: 15,
+    lineHeight: 21,
   },
   editButton: {
     width: 40,
@@ -238,67 +271,83 @@ const RAW_STYLES = {
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 24,
-    gap: 12,
+    paddingTop: 12,
+    paddingBottom: 20,
+    gap: 10,
+  },
+  languageCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.62)',
+    borderRadius: 22,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
   },
   menuCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.62)',
     borderRadius: 24,
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 16,
   },
   menuIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
   },
   menuIcon: {
-    width: 22,
-    height: 22,
+    width: 24,
+    height: 24,
   },
   menuTitle: {
     color: '#101828',
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 17,
+    fontWeight: '600',
     lineHeight: 24,
   },
   menuSubtitle: {
     color: '#6a7282',
     fontSize: 14,
-    lineHeight: 20,
+    lineHeight: 19,
   },
   menuDivider: {
-    marginLeft: 72,
+    marginLeft: 78,
     height: 1,
-    backgroundColor: '#f3f4f6',
+    backgroundColor: 'rgba(0,0,0,0.06)',
   },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    height: 51,
-    borderRadius: 24,
-    borderWidth: 1,
+    gap: 10,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 1.3,
     borderColor: '#ef4444',
-    marginTop: 4,
+    marginTop: 2,
   },
   logoutText: {
     color: '#ef4444',
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
     lineHeight: 24,
   },
   version: {
@@ -306,6 +355,6 @@ const RAW_STYLES = {
     color: '#6a7282',
     fontSize: 12,
     lineHeight: 16,
-    marginTop: 8,
+    marginTop: 4,
   },
 } as const;

@@ -20,6 +20,18 @@ export const formatShortDate = (value?: string | Date | null) => {
   });
 };
 
+// "14:00" → "2:00 PM"; leaves values it can't parse untouched.
+export const formatTime12 = (value?: string | null) => {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
+  if (!match) return String(value || '');
+  const hours = Number(match[1]);
+  const minutes = match[2];
+  if (!Number.isFinite(hours) || hours > 23) return String(value || '');
+  const suffix = hours >= 12 ? 'PM' : 'AM';
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
+  return `${hour12}:${minutes} ${suffix}`;
+};
+
 export const formatDateTime = (value?: string | Date | null) => {
   if (!value) return '';
   const date = value instanceof Date ? value : new Date(value);

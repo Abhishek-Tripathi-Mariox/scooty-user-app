@@ -1,32 +1,37 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Easing,
   Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
-  Platform,
   Pressable,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { BottomTabs, type TabKey } from '../components/BottomTabs';
 import { GradientButton } from '../components/GradientButton';
-import { MapPinIcon, ScooterIcon, ShareIcon, WalletIcon } from '../components/HomeIcons';
+import { MapPinIcon, ScooterIcon, ShareIcon } from '../components/HomeIcons';
 import { LiveMap } from '../components/LiveMap';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { AddressPinIcon, BatteryIcon, ClockIcon } from '../components/RideIcons';
 import { ScreenSurface } from '../components/ScreenSurface';
 import type { Dashboard, User } from '../services/userApi';
 import type { PickupStation } from './PickupStationScreen';
-import { formatCurrency } from '../utils/format';
 import { useResponsiveLayout } from '../utils/responsive';
+import { STATUS_TOP_INSET } from '../utils/statusBarInset';
 
 const ScootyImage = require('../assets/images/scooty-3d.png');
-const ReferPerson = require('../assets/images/refer-person.png');
+// Cropped to just the 3D person (the original PNG is a wide canvas with
+// ~60% empty transparent space on the left).
+const ReferPerson = require('../assets/images/refer-person-cropped.png');
 
-const STATUS_BAR_PAD = Platform.OS === 'android' ? StatusBar.currentHeight ?? 24 : 8;
+// The Root wrapper (index.js) pads every screen below the status bar, but
+// the Home map should run edge-to-edge behind the transparent bar — so the
+// map card pulls itself up by the same inset and pads its header instead.
+const STATUS_BAR_PAD = STATUS_TOP_INSET + 8;
 const MAP_HEIGHT = 250;
 
 export function HomeScreen({
@@ -65,11 +70,40 @@ export function HomeScreen({
 
   const scrollX = useRef(new Animated.Value(0)).current;
   const [activeIndex, setActiveIndex] = useState(0);
+  // Page scroll pauses while a finger is on the map so map pan/pinch-zoom
+  // gestures stay smooth instead of fighting the ScrollView.
+  const [mapTouching, setMapTouching] = useState(false);
+
+  // Gentle endless float for the active card's scooter image.
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, {
+          toValue: 1,
+          duration: 1600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatAnim, {
+          toValue: 0,
+          duration: 1600,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [floatAnim]);
+  const floatY = floatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -8] });
   const handleMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const offset = e.nativeEvent.contentOffset.x;
     const next = Math.max(0, Math.round(offset / snapStep));
     setActiveIndex(next);
   };
+  // Pure native-driver scroll tracking — no JS work per frame, so the
+  // card animations stay perfectly smooth.
   const handleScroll = Animated.event(
     [{ nativeEvent: { contentOffset: { x: scrollX } } }],
     { useNativeDriver: true },
@@ -80,10 +114,20 @@ export function HomeScreen({
   return (
     <ScreenSurface>
       <View style={styles.root}>
+        {/* One scroll for the whole page — map, book button and sections all
+            move together. The scroll area itself extends up under the
+            transparent status bar so the map reaches the very top edge. */}
+        <ScrollView
+          style={[styles.bodyScroll, { marginTop: -STATUS_TOP_INSET }]}
+          contentContainerStyle={styles.bodyContent}
+          showsVerticalScrollIndicator={false}
+          scrollEnabled={!mapTouching}
+        >
         <View style={[styles.mapCard, { height: mapHeight }]}>
           <LiveMap
             stations={stations || []}
             style={StyleSheet.absoluteFillObject}
+            onTouchActive={setMapTouching}
           />
           <View
             style={[styles.headerRow, { paddingTop: STATUS_BAR_PAD + 12 }]}
@@ -94,8 +138,8 @@ export function HomeScreen({
               onPress={onLocationPress}
               hitSlop={6}
             >
-              <MapPinIcon size={20} />
-              <View style={{ marginLeft: 8 }}>
+              <MapPinIcon size={22} />
+              <View style={{ marginLeft: 10 }}>
                 <Text style={styles.locationLabel}>Your location</Text>
                 <Text style={styles.locationValue} numberOfLines={1}>
                   {city}
@@ -104,9 +148,9 @@ export function HomeScreen({
             </Pressable>
 
             <Pressable style={styles.walletPill} onPress={onWalletPress} hitSlop={6}>
-              <WalletIcon size={20} />
+              <WalletCardGlyph />
               <Text style={styles.walletText}>
-                {dashboard ? formatCurrency(dashboard.walletBalance) : '₹0'}
+                {`₹${Math.round(dashboard?.walletBalance ?? 0)}`}
               </Text>
             </Pressable>
           </View>
@@ -124,11 +168,6 @@ export function HomeScreen({
           />
         </View>
 
-        <ScrollView
-          style={styles.bodyScroll}
-          contentContainerStyle={styles.bodyContent}
-          showsVerticalScrollIndicator={false}
-        >
           <View style={[styles.sectionRow, { paddingHorizontal: layout.screenX }]}>
             <Text style={styles.sectionTitle}>Nearest Available Scooty</Text>
             <Pressable onPress={onViewAll} hitSlop={8}>
@@ -149,11 +188,11 @@ export function HomeScreen({
               showsHorizontalScrollIndicator={false}
               snapToInterval={snapStep}
               snapToAlignment="start"
-              decelerationRate={0.92}
+              decelerationRate="fast"
               disableIntervalMomentum
               scrollEventThrottle={16}
               onScroll={handleScroll}
-              contentContainerStyle={{ paddingHorizontal: sideInset, paddingVertical: 4 }}
+              contentContainerStyle={{ paddingHorizontal: sideInset, paddingTop: 20, paddingBottom: 32 }}
               ItemSeparatorComponent={() => <View style={{ width: carouselGap }} />}
               onMomentumScrollEnd={handleMomentumEnd}
               renderItem={({ item, index }) => {
@@ -162,22 +201,50 @@ export function HomeScreen({
                   index * snapStep,
                   (index + 1) * snapStep,
                 ];
+                // Centre card full size, side cards slightly smaller and
+                // dimmed, peeking in from the screen edges (matches design).
                 const scale = scrollX.interpolate({
                   inputRange,
-                  outputRange: [0.88, 1, 0.88],
+                  outputRange: [0.9, 1, 0.9],
                   extrapolate: 'clamp',
                 });
                 const opacity = scrollX.interpolate({
                   inputRange,
-                  outputRange: [0.55, 1, 0.55],
+                  outputRange: [0.7, 1, 0.7],
+                  extrapolate: 'clamp',
+                });
+                // Vertical stagger: the centre card sits slightly lower,
+                // side cards ride a little higher (matches the design).
+                const translateY = scrollX.interpolate({
+                  inputRange,
+                  outputRange: [-16, 8, -16],
+                  extrapolate: 'clamp',
+                });
+                // Soft shadow fades in only while the card is centred.
+                const shadowOpacity = scrollX.interpolate({
+                  inputRange,
+                  outputRange: [0, 1, 0],
+                  extrapolate: 'clamp',
+                });
+                // Parallax: the scooter drifts opposite the scroll, slower
+                // than the card it sits on.
+                const parallax = scrollX.interpolate({
+                  inputRange,
+                  outputRange: [-22, 0, 22],
                   extrapolate: 'clamp',
                 });
                 return (
-                  <Animated.View style={{ transform: [{ scale }], opacity }}>
+                  <Animated.View style={{ opacity, transform: [{ translateY }, { scale }] }}>
+                    <Animated.View
+                      pointerEvents="none"
+                      style={[styles.centerShadow, { opacity: shadowOpacity }]}
+                    />
                     <StationCard
                       station={item}
                       width={cardWidth}
                       active={index === activeIndex}
+                      float={floatY}
+                      parallax={parallax}
                       onPress={() => onBookScooty(item.id)}
                     />
                   </Animated.View>
@@ -209,12 +276,7 @@ export function HomeScreen({
               </View>
             </View>
 
-            <View
-              style={[
-                styles.referralVisual,
-                { width: layout.referralVisualSize * 1.1, height: layout.referralVisualSize },
-              ]}
-            >
+            <View style={styles.referralVisual}>
               <Image source={ReferPerson} style={styles.referralImage} resizeMode="contain" />
             </View>
           </Pressable>
@@ -226,10 +288,37 @@ export function HomeScreen({
   );
 }
 
+function WalletCardGlyph() {
+  // Wallet glyph (from the provided design asset) used inside the wallet pill.
+  return (
+    <Svg width={21} height={20} viewBox="0 0 19 18" fill="none">
+      <Path
+        d="M17.9958 14.9965V15.9963C17.9958 17.096 17.096 17.9958 15.9963 17.9958H1.99953C0.889792 17.9958 0 17.096 0 15.9963V1.99953C0 0.89979 0.889792 0 1.99953 0H15.9963C17.096 0 17.9958 0.89979 17.9958 1.99953V2.9993H8.9979C7.88816 2.9993 6.99837 3.89909 6.99837 4.99883V12.997C6.99837 14.0967 7.88816 14.9965 8.9979 14.9965H17.9958ZM8.9979 12.997H18.9956V4.99883H8.9979V12.997ZM12.997 10.4976C12.1672 10.4976 11.4973 9.82771 11.4973 8.9979C11.4973 8.16809 12.1672 7.49825 12.997 7.49825C13.8268 7.49825 14.4966 8.16809 14.4966 8.9979C14.4966 9.82771 13.8268 10.4976 12.997 10.4976Z"
+        fill="#1C1C1E"
+      />
+    </Svg>
+  );
+}
+
 function PeopleIcon() {
   return (
     <View style={styles.peopleIconWrap}>
-      <Text style={styles.peopleIconText}>👥</Text>
+      <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+        <Circle cx={9} cy={8} r={3.2} stroke="#1c1c1e" strokeWidth={1.7} />
+        <Path
+          d="M3.5 19c.6-3 2.8-4.5 5.5-4.5s4.9 1.5 5.5 4.5"
+          stroke="#1c1c1e"
+          strokeWidth={1.7}
+          strokeLinecap="round"
+        />
+        <Circle cx={16.5} cy={9} r={2.4} stroke="#1c1c1e" strokeWidth={1.5} />
+        <Path
+          d="M15.5 14.6c2.3.2 4.2 1.5 4.8 4"
+          stroke="#1c1c1e"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+        />
+      </Svg>
     </View>
   );
 }
@@ -249,16 +338,23 @@ function StationCard({
   station,
   width,
   active,
+  float,
+  parallax,
   onPress,
 }: {
   station: PickupStation;
   width: number;
   active: boolean;
+  float?: Animated.AnimatedInterpolation<number>;
+  parallax?: Animated.AnimatedInterpolation<number>;
   onPress: () => void;
 }) {
-  void active;
-  const artSize = 118;
-  const overlap = 70;
+  const artSize = 150;
+  const overlap = 96;
+
+  const artTransforms: Array<Record<string, unknown>> = [];
+  if (parallax) artTransforms.push({ translateX: parallax });
+  if (active && float) artTransforms.push({ translateY: float });
 
   return (
     <Pressable
@@ -272,7 +368,7 @@ function StationCard({
       <View
         style={[
           styles.stationCardBody,
-          { width: '100%', paddingTop: artSize - overlap + 8 },
+          { width: '100%', paddingTop: artSize - overlap + 10 },
         ]}
       >
         <Text style={styles.stationName} numberOfLines={1}>
@@ -286,19 +382,25 @@ function StationCard({
         <GradientButton
           label="Book Now"
           onPress={onPress}
-          height={44}
-          radius={12}
+          height={46}
+          radius={14}
           style={styles.bookNowButton}
         />
       </View>
 
-      <View pointerEvents="none" style={styles.stationArtWrap}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.stationArtWrap,
+          artTransforms.length > 0 ? { transform: artTransforms as never } : null,
+        ]}
+      >
         <Image
           source={ScootyImage}
-          style={{ width: artSize * 1.2, height: artSize }}
+          style={{ width: artSize * 1.25, height: artSize }}
           resizeMode="contain"
         />
-      </View>
+      </Animated.View>
     </Pressable>
   );
 }
@@ -327,39 +429,38 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   locationLabel: {
-    color: '#1c1c1e',
-    fontSize: 14,
+    color: '#3f3f46',
+    fontSize: 13.5,
     letterSpacing: 0.14,
   },
   locationValue: {
     color: '#000',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17.5,
+    fontWeight: '700',
     marginTop: 2,
     letterSpacing: 0.16,
   },
   walletPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    gap: 8,
+    borderRadius: 14,
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.9)',
-    paddingHorizontal: 12,
-    height: 36,
-    minWidth: 84,
+    borderColor: '#ececf0',
+    paddingHorizontal: 13,
+    height: 40,
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.18,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 2,
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
   walletText: {
-    color: '#1c1c1e',
-    fontSize: 14,
-    fontWeight: '600',
+    color: '#17181c',
+    fontSize: 16,
+    fontWeight: '700',
   },
   bookButtonWrap: {
     marginTop: -28,
@@ -427,11 +528,27 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   stationCardBody: {
-    borderRadius: 22,
+    borderRadius: 24,
     backgroundColor: '#ffffff',
-    paddingHorizontal: 14,
-    paddingBottom: 14,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
     alignItems: 'stretch',
+  },
+  // Rendered behind the card; fades in only when the card is centred so the
+  // soft shadow belongs to the front card alone.
+  centerShadow: {
+    position: 'absolute',
+    top: 100,
+    left: 6,
+    right: 6,
+    bottom: 8,
+    borderRadius: 24,
+    backgroundColor: '#ffffff',
+    shadowColor: '#b3705a',
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 12,
   },
   stationArtWrap: {
     position: 'absolute',
@@ -443,17 +560,17 @@ const styles = StyleSheet.create({
   },
   stationName: {
     color: '#363636',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
     textAlign: 'center',
     marginBottom: 10,
   },
   statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
-    gap: 4,
+    marginBottom: 14,
+    gap: 10,
   },
   statPill: {
     flexDirection: 'row',
@@ -471,21 +588,21 @@ const styles = StyleSheet.create({
   },
   referralCard: {
     marginTop: 6,
-    borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.78)',
+    borderRadius: 16,
+    backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
+    borderColor: '#f1f0f4',
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     overflow: 'hidden',
-    minHeight: 124,
+    minHeight: 128,
     shadowColor: '#d8bbb0',
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.18,
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
+    elevation: 4,
   },
   referralTextWrap: {
     flex: 1,
@@ -503,51 +620,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  peopleIconText: {
-    fontSize: 16,
-  },
   referralTitle: {
     color: '#1c1c1e',
     fontSize: 18,
-    fontWeight: '500',
+    fontWeight: '700',
     lineHeight: 24,
   },
   referralSubtitle: {
-    color: 'rgba(28,28,30,0.7)',
-    fontSize: 12,
-    lineHeight: 16,
-    marginBottom: 10,
-    maxWidth: 200,
+    color: '#6b7280',
+    fontSize: 12.5,
+    lineHeight: 17,
+    marginBottom: 12,
+    maxWidth: 190,
   },
   shareButton: {
     alignSelf: 'flex-start',
-    borderRadius: 18,
-    borderWidth: 1,
+    borderRadius: 20,
+    borderWidth: 1.3,
     borderColor: '#ff7a45',
     backgroundColor: 'transparent',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 6,
-    height: 34,
+    height: 36,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
   },
   shareButtonText: {
     color: '#ff7a45',
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
   },
+  // Matches the design spec: the 3D person is a fixed 120 × 138 block on the
+  // card's right side, fully inside the card.
   referralVisual: {
-    width: 100,
-    height: 110,
+    width: 120,
+    height: 138,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
   },
   referralImage: {
-    position: 'absolute',
-    right: -8,
-    bottom: -10,
-    width: '120%',
-    height: '130%',
+    width: '100%',
+    height: '100%',
   },
 });

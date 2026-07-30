@@ -11,10 +11,10 @@ import {
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
+import { ScooterIcon } from '../components/HomeIcons';
 import {
   ArrowLeftIcon,
   BatteryIcon,
-  ScooterSideIcon,
   WalletCardIcon,
 } from '../components/RideIcons';
 
@@ -40,26 +40,31 @@ export function PreRideScreen({
   onBack,
   onStartRide,
   scootyId = 'Unavailable',
-  scootyBattery = 0,
-  scootyRange = 0,
-  farePerMinute = 3,
-  farePerKilometer = 8,
+  scootyModel,
+  scootyBattery = null,
+  planName,
+  totalPayable,
   walletBalance = 0,
   loading = false,
 }: {
   onBack: () => void;
   onStartRide: (destinationId: string | null) => void;
   scootyId?: string;
-  scootyBattery?: number;
-  scootyRange?: number;
-  farePerMinute?: number;
-  farePerKilometer?: number;
+  scootyModel?: string;
+  scootyBattery?: number | null;
+  planName?: string;
+  totalPayable?: number;
   walletBalance?: number;
   loading?: boolean;
 }) {
   const [destination, setDestination] = useState<string | null>(null);
-  const estimatedFare = farePerMinute * 15 + farePerKilometer * 5;
-  const walletOk = walletBalance >= 50;
+  const hasBattery = scootyBattery != null && Number.isFinite(scootyBattery);
+  const batteryText = hasBattery ? `${scootyBattery}%` : '—';
+  // Rough range estimate from battery (~60 km on a full charge).
+  const rangeText = hasBattery ? `${Math.round((scootyBattery as number) * 0.6)} km` : '—';
+  // Minimum wallet balance requirement disabled for now:
+  // const walletOk = walletBalance >= 50;
+  const walletOk = true;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -83,11 +88,11 @@ export function PreRideScreen({
           <View style={styles.card}>
             <View style={styles.scootyHeader}>
               <View style={styles.scootyIconBox}>
-                <ScooterSideIcon size={32} color="#363636" />
+                <ScooterIcon size={30} color="#fc4c02" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.scootyId}>{scootyId}</Text>
-                <Text style={styles.scootyPlate}>KA 01 AB 1234</Text>
+                {scootyModel ? <Text style={styles.scootyPlate}>{scootyModel}</Text> : null}
               </View>
             </View>
 
@@ -96,33 +101,29 @@ export function PreRideScreen({
                 <BatteryIcon size={22} color="#16a34a" />
                 <View>
                   <Text style={styles.statLabel}>Battery</Text>
-                  <Text style={styles.statValue}>{scootyBattery}%</Text>
+                  <Text style={styles.statValue}>{batteryText}</Text>
                 </View>
               </View>
               <View style={styles.scootyStat}>
                 <GaugeIcon color="#363636" />
                 <View>
                   <Text style={styles.statLabel}>Range</Text>
-                  <Text style={styles.statValue}>{scootyRange} km</Text>
+                  <Text style={styles.statValue}>{rangeText}</Text>
                 </View>
               </View>
             </View>
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Fare Estimate</Text>
+            <Text style={styles.cardTitle}>Fare Details</Text>
             <View style={styles.fareRow}>
-              <Text style={styles.fareLabel}>Per Minute</Text>
-              <Text style={styles.fareValue}>₹{farePerMinute}</Text>
-            </View>
-            <View style={styles.fareRow}>
-              <Text style={styles.fareLabel}>Per Kilometer</Text>
-              <Text style={styles.fareValue}>₹{farePerKilometer}</Text>
+              <Text style={styles.fareLabel}>Plan</Text>
+              <Text style={styles.fareValue}>{planName || '—'}</Text>
             </View>
             <View style={styles.fareDivider} />
             <View style={styles.fareRow}>
-              <Text style={styles.fareLabel}>Estimated for 15 min / 5 km</Text>
-              <Text style={styles.fareTotal}>₹{estimatedFare}</Text>
+              <Text style={styles.fareLabel}>Total Amount</Text>
+              <Text style={styles.fareTotal}>₹{totalPayable ?? 0}</Text>
             </View>
           </View>
 
@@ -180,7 +181,8 @@ export function PreRideScreen({
                 <Text style={styles.walletChipText}>{walletOk ? 'Sufficient' : 'Low'}</Text>
               </View>
             </View>
-            <Text style={styles.walletNote}>Minimum balance required: ₹50</Text>
+            {/* Minimum balance requirement disabled for now:
+            <Text style={styles.walletNote}>Minimum balance required: ₹50</Text> */}
           </View>
         </View>
       </ScrollView>

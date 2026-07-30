@@ -1,17 +1,19 @@
 import { Platform } from 'react-native';
 
+// LAN IP of the dev machine so physical devices can reach the local backend.
+// Use 10.0.2.2 instead when running on the Android emulator.
 const LOCAL_USER_API_BASE_URL =
   Platform.select({
-    android: 'http://10.0.2.2:3000/v1/api',
-    ios: 'http://localhost:3000/v1/api',
+    android: 'http://192.168.68.109:3000/v1/api',
+    ios: 'http://192.168.68.112:3000/v1/api',
     default: 'http://localhost:3000/v1/api',
-  }) || 'http://localhost:3000/v1/api';
+  }) || 'http://192.168.68.112:3000/v1/api';
 
-const HOSTED_USER_API_BASE_URL: string = 'https://mira-ai.marioxsoftware.net/scooty/v1/api';
-const LEGACY_HOSTED_USER_API_BASE_URL: string = 'https://mira-ai.marioxsoftware.net/v1/api';
+const HOSTED_USER_API_BASE_URL: string = 'https://backend.slydomobility.com/v1/api';
 
-export const USER_API_BASE_URL: string = HOSTED_USER_API_BASE_URL;
-const USER_API_BASE_URLS = [HOSTED_USER_API_BASE_URL, LEGACY_HOSTED_USER_API_BASE_URL, LOCAL_USER_API_BASE_URL];
+// Local backend first for development; hosted kept as fallback
+export const USER_API_BASE_URL: string = LOCAL_USER_API_BASE_URL;
+const USER_API_BASE_URLS = [LOCAL_USER_API_BASE_URL, HOSTED_USER_API_BASE_URL];
 
 type JsonObject = Record<string, unknown>;
 
@@ -139,6 +141,8 @@ export type RideItem = {
     paidAt?: string;
   };
   unlockCode?: string;
+  rideStartedAt?: string;
+  actualDurationMinutes?: number;
   pickupStation?: StationItem;
   dropStation?: StationItem;
   scooter?: {
@@ -146,6 +150,7 @@ export type RideItem = {
     modelName?: string;
     registrationNumber?: string;
     imageUrl?: string;
+    batteryPercent?: number | null;
   };
   schedule?: BookingItem['schedule'];
   distance?: number;
@@ -234,6 +239,7 @@ export type BookingItem = {
     _id?: string;
     modelName?: string;
     registrationNumber?: string;
+    batteryPercent?: number | null;
     photos?: {
       frontUrl?: string;
       sideUrl?: string;
@@ -257,6 +263,7 @@ export type BookingItem = {
     paidAt?: string;
   };
   unlockCode?: string;
+  rideStartedAt?: string;
   refund?: {
     status?: string;
     amount?: number;
@@ -283,6 +290,7 @@ export type BookingItem = {
     modelName?: string;
     registrationNumber?: string;
     imageUrl?: string;
+    batteryPercent?: number | null;
   };
   schedule?: {
     date?: string;
@@ -627,12 +635,32 @@ export const userApi = {
       rating?: number;
       review?: string;
     } = {},
-  ) =>
-    request<{ booking: BookingItem }>(`/user/bookings/${bookingId}/complete`, {
+    parkingPhoto?: KycUploadFile | null,
+  ) => {
+    if (parkingPhoto) {
+      const formData = new FormData();
+      Object.entries(payload).forEach(([key, value]) => {
+        if (value === undefined || value === null || value === '') return;
+        formData.append(key, String(value));
+      });
+      formData.append('parkingPhoto', {
+        uri: parkingPhoto.uri,
+        name: parkingPhoto.name,
+        type: parkingPhoto.type,
+      } as unknown as Blob);
+      return request<{ booking: BookingItem }>(`/user/bookings/${bookingId}/complete`, {
+        method: 'POST',
+        token,
+        isFormData: true,
+        body: formData,
+      });
+    }
+    return request<{ booking: BookingItem }>(`/user/bookings/${bookingId}/complete`, {
       method: 'POST',
       token,
       body: payload,
-    }),
+    });
+  },
   cancelBooking: (token: string, bookingId: string, payload: { reason?: string } = {}) =>
     request<{ booking: BookingItem }>(`/user/bookings/${bookingId}/cancel`, {
       method: 'POST',
@@ -693,7 +721,16 @@ export const userApi = {
     ),
   rideDetail: (token: string, rideId: string) =>
     request<{ ride: RideItem }>(`/user/rides/history/${rideId}`, { token }),
-  stations: (token: string, query: { city?: string; latitude?: number; longitude?: number; search?: string } = {}) =>
+  stations: (
+    token: string,
+    query: {
+      city?: string;
+      latitude?: number;
+      longitude?: number;
+      search?: string;
+      radiusKm?: number;
+    } = {},
+  ) =>
     request<{ stations: StationItem[] }>('/user/stations', {
       token,
       query: {
@@ -701,6 +738,7 @@ export const userApi = {
         search: query.search,
         lat: query.latitude,
         lng: query.longitude,
+        radiusKm: query.radiusKm,
       },
     }),
   supportFaqs: (token: string) =>

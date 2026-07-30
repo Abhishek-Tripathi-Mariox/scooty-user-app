@@ -50,7 +50,13 @@ export function BookingsScreen({
     return list.filter((b) => {
       const status = (b.status || '').toLowerCase();
       if (selectedTab === 'upcoming') {
-        return !status || status === 'pending' || status === 'upcoming' || status === 'confirmed';
+        return (
+          !status ||
+          status === 'pending' ||
+          status === 'pending_payment' ||
+          status === 'upcoming' ||
+          status === 'confirmed'
+        );
       }
       if (selectedTab === 'active') return status === 'ongoing' || status === 'active';
       return status === 'completed' || status === 'cancelled';
@@ -130,12 +136,22 @@ function RideCard({
   const timeLabel =
     booking.schedule?.startLabel || formatDateTime(booking.startAt || booking.startTime) || '—';
   const total = formatCurrency(booking.pricing?.totalPayable ?? booking.fare) || '₹0.00';
+  const status = (booking.status || '').toLowerCase();
+  const isPendingApproval = status === 'pending_payment';
+  const isConfirmed = status === 'confirmed';
+  const isCancelled = status === 'cancelled';
   const statusLabel =
     tab === 'upcoming'
-      ? 'Upcoming'
+      ? isPendingApproval
+        ? 'Pending Approval'
+        : isConfirmed
+          ? 'Confirmed'
+          : 'Upcoming'
       : tab === 'active'
         ? 'Active'
-        : 'Completed';
+        : isCancelled
+          ? 'Cancelled'
+          : 'Completed';
 
   return (
     <View style={styles.card}>
@@ -166,7 +182,9 @@ function RideCard({
       </View>
 
       <View style={styles.paidBox}>
-        <Text style={styles.paidLabel}>Total Paid</Text>
+        <Text style={styles.paidLabel}>
+          {isPendingApproval || isCancelled ? 'Total Amount' : 'Total Paid'}
+        </Text>
         <Text style={styles.paidValue}>{total}</Text>
       </View>
 
@@ -180,25 +198,35 @@ function RideCard({
       ) : tab === 'completed' ? (
         <Pressable
           style={[styles.actionButton, styles.actionDark, styles.actionFull]}
-          onPress={() => onViewReceipt?.(booking)}
+          onPress={() => (isCancelled ? onViewDetails?.(booking) : onViewReceipt?.(booking))}
         >
-          <Text style={styles.actionDarkText}>View Receipt</Text>
+          <Text style={styles.actionDarkText}>{isCancelled ? 'View Details' : 'View Receipt'}</Text>
         </Pressable>
       ) : (
-        <View style={styles.actionsRow}>
-          <Pressable
-            style={[styles.actionButton, styles.actionDark]}
-            onPress={() => onViewDetails?.(booking)}
-          >
-            <Text style={styles.actionDarkText}>View Details</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.actionButton, styles.actionRed]}
-            onPress={() => onCancelBooking?.(booking)}
-          >
-            <Text style={styles.actionRedText}>Cancel</Text>
-          </Pressable>
-        </View>
+        <>
+          {isConfirmed ? (
+            <GradientButton
+              label="Start Ride"
+              onPress={() => onStartRide?.(booking)}
+              height={40}
+              radius={24}
+            />
+          ) : null}
+          <View style={[styles.actionsRow, isConfirmed ? { marginTop: 10 } : null]}>
+            <Pressable
+              style={[styles.actionButton, styles.actionDark]}
+              onPress={() => onViewDetails?.(booking)}
+            >
+              <Text style={styles.actionDarkText}>View Details</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.actionButton, styles.actionRed]}
+              onPress={() => onCancelBooking?.(booking)}
+            >
+              <Text style={styles.actionRedText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </>
       )}
     </View>
   );

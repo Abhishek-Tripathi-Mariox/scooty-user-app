@@ -20,6 +20,7 @@ export function BookingConfirmedScreen({
   rideStartsIn,
   pickupLat,
   pickupLng,
+  pending = false,
 }: {
   onBack: () => void;
   onViewDetails: () => void;
@@ -36,6 +37,7 @@ export function BookingConfirmedScreen({
   rideStartsIn?: string;
   pickupLat?: number | null;
   pickupLng?: number | null;
+  pending?: boolean;
 }) {
   const openMaps = async () => {
     if (typeof pickupLat !== 'number' || typeof pickupLng !== 'number') {
@@ -70,12 +72,16 @@ export function BookingConfirmedScreen({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.successCircle}>
-          <Text style={styles.successCheck}>✓</Text>
+        <View style={[styles.successCircle, pending ? styles.pendingCircle : null]}>
+          <Text style={styles.successCheck}>{pending ? '⏳' : '✓'}</Text>
         </View>
 
-        <Text style={styles.title}>Booking Confirmed!</Text>
-        <Text style={styles.subtitle}>Your scooty ride has been successfully booked</Text>
+        <Text style={styles.title}>{pending ? 'Booking Requested!' : 'Booking Confirmed!'}</Text>
+        <Text style={styles.subtitle}>
+          {pending
+            ? 'Your booking is waiting for station admin approval. We will notify you once it is confirmed.'
+            : 'Your scooty ride has been successfully booked'}
+        </Text>
 
         <View style={styles.idCard}>
           <Text style={styles.idText}>Booking ID : {bookingId || 'Unavailable'}</Text>
@@ -111,16 +117,25 @@ export function BookingConfirmedScreen({
           <Text style={styles.directionsText}>Get Directions</Text>
         </Pressable>
 
-        <Pressable
-          style={[styles.startRideButton, !canStartRide && styles.startRideButtonDisabled]}
-          onPress={canStartRide ? onStartRide : undefined}
-          disabled={!canStartRide}
-        >
-          <SmallScooterIcon size={20} color="#ffffff" />
-          <Text style={styles.startRideText}>
-            {canStartRide ? 'Start Ride' : 'Starts at Scheduled Time'}
-          </Text>
-        </Pressable>
+        {pending ? (
+          <View style={[styles.startRideButton, styles.pendingButton]}>
+            <ClockIcon size={20} color="#92400e" />
+            <Text style={[styles.startRideText, styles.pendingButtonText]}>
+              Waiting for approval
+            </Text>
+          </View>
+        ) : (
+          <Pressable
+            style={[styles.startRideButton, !canStartRide && styles.startRideButtonDisabled]}
+            onPress={canStartRide ? onStartRide : undefined}
+            disabled={!canStartRide}
+          >
+            <SmallScooterIcon size={20} color="#ffffff" />
+            <Text style={styles.startRideText}>
+              {canStartRide ? 'Start Ride' : 'Starts at Scheduled Time'}
+            </Text>
+          </Pressable>
+        )}
 
         <View style={styles.secondaryRow}>
           <Pressable style={styles.secondaryButton} onPress={onViewDetails}>
@@ -313,6 +328,17 @@ const RAW_STYLES = {
     fontSize: 16,
     fontWeight: '700',
     lineHeight: 28,
+  },
+  pendingCircle: {
+    backgroundColor: '#fbbf24',
+  },
+  pendingButton: {
+    backgroundColor: '#fef3c7',
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  pendingButtonText: {
+    color: '#92400e',
   },
   secondaryRow: {
     marginTop: 16,

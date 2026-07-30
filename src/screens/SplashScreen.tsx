@@ -129,7 +129,7 @@ export function SplashScreen({ onGetStarted }: { onGetStarted?: () => void }) {
         }),
       ]),
 
-      // Screen 4 — hold the full lockup
+      // 4 — hold the full lockup
       Animated.delay(PHASE_4_HOLD_MS),
 
       // Name hides back into the logo
@@ -195,7 +195,7 @@ export function SplashScreen({ onGetStarted }: { onGetStarted?: () => void }) {
 
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fdebd6" />
+      <StatusBar translucent barStyle="dark-content" backgroundColor="transparent" />
 
       <SplashBackground width={width} height={height} />
 

@@ -1,24 +1,72 @@
-import { useState } from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useRef, useState } from 'react';
+import {
+  Alert,
+  Image,
+  Modal,
+  PermissionsAndroid,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { Camera, CameraType, type CameraApi } from 'react-native-camera-kit';
 import Svg, { Path, Rect } from 'react-native-svg';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
-import { ArrowLeftIcon, CheckIcon } from '../components/RideIcons';
+import { ArrowLeftIcon } from '../components/RideIcons';
+import type { KycUploadFile } from '../services/userApi';
 
 export function ParkingConfirmationScreen({
   onBack,
   onConfirmParking,
   onRetakePhoto,
-  photoTaken: photoTakenProp = false,
 }: {
   onBack: () => void;
   onRetakePhoto?: () => void;
-  onConfirmParking: () => void;
+  onConfirmParking: (photo: KycUploadFile | null) => void;
   photoTaken?: boolean;
 }) {
-  const [photoTaken, setPhotoTaken] = useState(photoTakenProp);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [capturing, setCapturing] = useState(false);
   const [agreed, setAgreed] = useState(false);
-  const canEndRide = photoTaken && agreed;
+  const cameraRef = useRef<CameraApi | null>(null);
+  const canEndRide = !!photoUri && agreed;
+
+  const openCamera = async () => {
+    if (Platform.OS === 'android') {
+      const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA, {
+        title: 'Camera permission',
+        message: 'Camera is needed to take a photo of the parked scooty.',
+        buttonPositive: 'Allow',
+        buttonNegative: 'Deny',
+      });
+      if (result !== PermissionsAndroid.RESULTS.GRANTED) {
+        Alert.alert('Camera needed', 'Please allow camera access to take the parking photo.');
+        return;
+      }
+    }
+    setCameraOpen(true);
+  };
+
+  const capturePhoto = async () => {
+    if (capturing) return;
+    try {
+      setCapturing(true);
+      const image = await cameraRef.current?.capture();
+      if (image?.uri) {
+        setPhotoUri(image.uri.startsWith('file') ? image.uri : `file://${image.uri}`);
+        setCameraOpen(false);
+      }
+    } catch {
+      Alert.alert('Camera', 'Could not capture the photo. Please try again.');
+    } finally {
+      setCapturing(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -38,13 +86,8 @@ export function ParkingConfirmationScreen({
       >
         <View style={styles.card}>
           <View style={styles.photoBox}>
-            {photoTaken ? (
-              <View style={styles.capturedWrap}>
-                <View style={styles.capturedCircle}>
-                  <CheckIcon size={40} color="#16a34a" />
-                </View>
-                <Text style={styles.capturedText}>Photo captured!</Text>
-              </View>
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={styles.photoPreview} resizeMode="cover" />
             ) : (
               <View style={styles.placeholderWrap}>
                 <CameraIcon color="#ffffff" />
@@ -53,18 +96,22 @@ export function ParkingConfirmationScreen({
             )}
           </View>
 
-          {photoTaken ? (
-            <Pressable style={styles.retakeButton} onPress={() => {
-              setPhotoTaken(false);
-              onRetakePhoto?.();
-            }}>
+          {photoUri ? (
+            <Pressable
+              style={styles.retakeButton}
+              onPress={() => {
+                setPhotoUri(null);
+                onRetakePhoto?.();
+                void openCamera();
+              }}
+            >
               <CameraIcon color="#fc4c02" size={18} />
               <Text style={styles.retakeText}>Retake Photo</Text>
             </Pressable>
           ) : (
             <GradientButton
               label="Take Photo"
-              onPress={() => setPhotoTaken(true)}
+              onPress={() => void openCamera()}
               height={37}
               radius={12}
               leftIcon={<CameraIcon color="#ffffff" size={18} />}
@@ -96,13 +143,54 @@ export function ParkingConfirmationScreen({
 
       <View style={styles.footer}>
         {canEndRide ? (
-          <GradientButton label="End Ride" onPress={onConfirmParking} height={52} radius={12} />
+          <GradientButton
+            label="End Ride"
+            onPress={() =>
+              onConfirmParking(
+                photoUri
+                  ? {
+                      uri: photoUri,
+                      name: `parking-${Date.now()}.jpg`,
+                      type: 'image/jpeg',
+                    }
+                  : null,
+              )
+            }
+            height={52}
+            radius={12}
+          />
         ) : (
           <View style={styles.endDisabled}>
             <Text style={styles.endDisabledText}>End Ride</Text>
           </View>
         )}
       </View>
+
+      <Modal
+        visible={cameraOpen}
+        animationType="slide"
+        onRequestClose={() => setCameraOpen(false)}
+      >
+        <View style={styles.cameraModal}>
+          <Camera
+            ref={cameraRef}
+            style={StyleSheet.absoluteFillObject}
+            cameraType={CameraType.Back}
+          />
+          <Pressable style={styles.cameraClose} onPress={() => setCameraOpen(false)} hitSlop={10}>
+            <Text style={styles.cameraCloseText}>×</Text>
+          </Pressable>
+          <View style={styles.cameraFooter}>
+            <Pressable
+              style={[styles.captureButton, capturing && { opacity: 0.5 }]}
+              onPress={() => void capturePhoto()}
+              disabled={capturing}
+            >
+              <View style={styles.captureInner} />
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -167,10 +255,56 @@ const styles = StyleSheet.create({
   photoBox: {
     backgroundColor: '#1b1e31',
     borderRadius: 14,
-    paddingVertical: 32,
+    minHeight: 190,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    overflow: 'hidden',
+  },
+  photoPreview: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  cameraModal: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+  cameraClose: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cameraCloseText: {
+    color: '#ffffff',
+    fontSize: 28,
+    lineHeight: 30,
+  },
+  cameraFooter: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 36,
+    alignItems: 'center',
+  },
+  captureButton: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    borderWidth: 4,
+    borderColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  captureInner: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#ffffff',
   },
   placeholderWrap: {
     alignItems: 'center',

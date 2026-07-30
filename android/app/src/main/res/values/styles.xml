@@ -5,8 +5,16 @@
         <!-- Customize your theme here. -->
         <item name="android:editTextBackground">@drawable/rn_edit_text_material</item>
         <item name="android:windowBackground">@drawable/launch_background</item>
-        <item name="android:statusBarColor">@color/launch_orange</item>
+        <!-- True edge-to-edge: fully transparent system bars, the app draws
+             across the entire screen. The JS root wrapper (index.js) paints
+             the background behind the bars and pads content below the status
+             bar so headers/back buttons stay tappable. -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:enforceStatusBarContrast">false</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
     </style>
 
 </resources>
