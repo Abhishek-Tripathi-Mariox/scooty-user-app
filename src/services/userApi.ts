@@ -11,9 +11,15 @@ const LOCAL_USER_API_BASE_URL =
 
 const HOSTED_USER_API_BASE_URL: string = 'https://backend.slydomobility.com/v1/api';
 
-// Local backend first for development; hosted kept as fallback
-export const USER_API_BASE_URL: string = LOCAL_USER_API_BASE_URL;
-const USER_API_BASE_URLS = [LOCAL_USER_API_BASE_URL, HOSTED_USER_API_BASE_URL];
+// Dev builds try the local backend first (hosted as fallback); release
+// builds must talk only to the hosted backend — a LAN IP would make every
+// request wait for an unreachable server before falling back.
+export const USER_API_BASE_URL: string = __DEV__
+  ? LOCAL_USER_API_BASE_URL
+  : HOSTED_USER_API_BASE_URL;
+const USER_API_BASE_URLS = __DEV__
+  ? [LOCAL_USER_API_BASE_URL, HOSTED_USER_API_BASE_URL]
+  : [HOSTED_USER_API_BASE_URL];
 
 type JsonObject = Record<string, unknown>;
 
