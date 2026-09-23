@@ -11,6 +11,7 @@ import {
 import { COLORS, SPACING } from '../constants/theme';
 import { ScreenSurface } from './ScreenSurface';
 import { useResponsiveLayout } from '../utils/responsive';
+import { useBottomInset } from '../utils/insets';
 
 export function PageFrame({
   children,
@@ -30,12 +31,13 @@ export function PageFrame({
   titleStyle?: StyleProp<TextStyle>;
 }) {
   const layout = useResponsiveLayout();
+  const bottomInset = useBottomInset();
   return (
     <ScreenSurface>
       {scroll ? (
         <ScrollView
           style={styles.container}
-          contentContainerStyle={[styles.content, { paddingBottom: Math.max(20, Math.round(layout.screenHeight * 0.02)) }]}
+          contentContainerStyle={[styles.content, { paddingBottom: Math.max(20, Math.round(layout.screenHeight * 0.02)) + bottomInset }]}
         >
           <FrameChrome
             title={title}
@@ -47,7 +49,7 @@ export function PageFrame({
           <View style={[styles.body, { paddingHorizontal: layout.screenX }]}>{children}</View>
         </ScrollView>
       ) : (
-        <View style={styles.container}>
+        <View style={[styles.container, { paddingBottom: bottomInset }]}>
           <FrameChrome
             title={title}
             subtitle={subtitle}
@@ -80,8 +82,8 @@ function FrameChrome({
     <>
       <View style={[styles.headerRow, { paddingHorizontal: layout.screenX, paddingTop: Math.max(18, Math.round(layout.screenHeight * 0.03)) }]}>
         {onBack ? (
-          <Pressable onPress={onBack} style={styles.backButton}>
-            <Text style={[styles.backText, { fontSize: Math.max(22, Math.round(layout.screenWidth * 0.06)) }]}>←</Text>
+          <Pressable onPress={onBack} style={styles.backButton} hitSlop={8}>
+            <Text style={styles.backText}>←</Text>
           </Pressable>
         ) : (
           <View style={styles.backPlaceholder} />
@@ -111,21 +113,31 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   backButton: {
-    width: 30,
-    height: 30,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
-    marginTop: 1,
+    marginRight: 12,
+    marginTop: -4,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.75)',
+    shadowColor: '#d9b7ab',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
   backText: {
     color: COLORS.textPrimary,
-    marginTop: -2,
+    fontSize: 19,
+    lineHeight: 21,
   },
   backPlaceholder: {
-    width: 30,
-    height: 30,
-    marginRight: 10,
+    width: 38,
+    height: 38,
+    marginRight: 12,
   },
   headerTextWrap: {
     flex: 1,

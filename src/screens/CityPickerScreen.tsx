@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -11,6 +12,7 @@ import {
 import { AppBackground } from '../components/AppBackground';
 import { ArrowLeftIcon } from '../components/RideIcons';
 import { MapPinIcon } from '../components/HomeIcons';
+import { useStyles } from '../utils/responsiveStyles';
 
 const CITIES = [
   'Bengaluru, Karnataka',
@@ -79,6 +81,7 @@ export function CityPickerScreen({
   currentCity?: string;
   onSelect: (city: string) => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const [search, setSearch] = useState('');
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -90,6 +93,10 @@ export function CityPickerScreen({
     <SafeAreaView style={styles.safe}>
       <AppBackground variant="auth" />
 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <View style={styles.header}>
         <Pressable onPress={onBack} style={styles.backButton}>
           <ArrowLeftIcon size={24} color="#0f172a" />
@@ -135,11 +142,12 @@ export function CityPickerScreen({
           })
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: 'transparent',
@@ -228,4 +236,4 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 14,
   },
-});
+} as const;

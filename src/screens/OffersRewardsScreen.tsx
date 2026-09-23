@@ -436,7 +436,7 @@ const RAW_STYLES = {
     color: '#101828',
     fontSize: 14,
     fontWeight: '700',
-    fontFamily: 'Courier',
+    fontFamily: 'monospace',
   },
   offerValid: { color: '#6a7282', fontSize: 12, lineHeight: 16 },
   earningsCard: {

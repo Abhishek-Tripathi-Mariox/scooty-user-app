@@ -1,4 +1,5 @@
 import { Alert, Linking, Platform, Pressable, SafeAreaView, ScrollView, Text, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { AppBackground } from '../components/AppBackground';
 import { ShareIcon } from '../components/HomeIcons';
 import {
@@ -21,6 +22,8 @@ export function BookingConfirmedScreen({
   pickupLat,
   pickupLng,
   pending = false,
+  rideOtp,
+  otpLoading = false,
 }: {
   onBack: () => void;
   onViewDetails: () => void;
@@ -38,6 +41,8 @@ export function BookingConfirmedScreen({
   pickupLat?: number | null;
   pickupLng?: number | null;
   pending?: boolean;
+  rideOtp?: string;
+  otpLoading?: boolean;
 }) {
   const openMaps = async () => {
     if (typeof pickupLat !== 'number' || typeof pickupLng !== 'number') {
@@ -72,15 +77,41 @@ export function BookingConfirmedScreen({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {rideOtp ? (
+          <View style={styles.otpPill}>
+            <Text style={styles.otpPillText}>
+              <Text style={styles.otpPillLabel}>OTP</Text>
+              <Text style={styles.otpPillDigits}>- {rideOtp}</Text>
+            </Text>
+          </View>
+        ) : null}
+
         <View style={[styles.successCircle, pending ? styles.pendingCircle : null]}>
-          <Text style={styles.successCheck}>{pending ? '⏳' : '✓'}</Text>
+          {pending ? (
+            <Text style={styles.successCheck}>{'⏳'}</Text>
+          ) : (
+            // Green disc, white inner disc, green tick.
+            <View style={styles.successInner}>
+              <Svg width={30} height={30} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="m6 12.5 4 4 8-9"
+                  stroke="#5fd64f"
+                  strokeWidth={3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </Svg>
+            </View>
+          )}
         </View>
 
         <Text style={styles.title}>{pending ? 'Booking Requested!' : 'Booking Confirmed!'}</Text>
         <Text style={styles.subtitle}>
           {pending
             ? 'Your booking is waiting for station admin approval. We will notify you once it is confirmed.'
-            : 'Your scooty ride has been successfully booked'}
+            : rideOtp
+              ? 'Share the OTP below with the station admin at pickup to start your ride.'
+              : 'Your scooty ride has been successfully booked'}
         </Text>
 
         <View style={styles.idCard}>
@@ -124,15 +155,28 @@ export function BookingConfirmedScreen({
               Waiting for approval
             </Text>
           </View>
+        ) : rideOtp ? (
+          <View style={styles.otpWrap}>
+            <Text style={styles.otpHint}>
+              Tell this OTP to the station admin. Your ride starts as soon as they enter it.
+            </Text>
+            <View style={styles.otpWaiting}>
+              <ClockIcon size={16} color="#92400e" />
+              <Text style={styles.otpWaitingText}>Waiting for station admin to start the ride…</Text>
+            </View>
+          </View>
         ) : (
           <Pressable
-            style={[styles.startRideButton, !canStartRide && styles.startRideButtonDisabled]}
-            onPress={canStartRide ? onStartRide : undefined}
-            disabled={!canStartRide}
+            style={[
+              styles.startRideButton,
+              (!canStartRide || otpLoading) && styles.startRideButtonDisabled,
+            ]}
+            onPress={canStartRide && !otpLoading ? onStartRide : undefined}
+            disabled={!canStartRide || otpLoading}
           >
             <SmallScooterIcon size={20} color="#ffffff" />
             <Text style={styles.startRideText}>
-              {canStartRide ? 'Start Ride' : 'Starts at Scheduled Time'}
+              {otpLoading ? 'Getting OTP…' : canStartRide ? 'Start Ride' : 'Starts at Scheduled Time'}
             </Text>
           </Pressable>
         )}
@@ -173,7 +217,7 @@ const RAW_STYLES = {
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: '#69df48',
+    backgroundColor: '#5fd64f',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
@@ -181,6 +225,14 @@ const RAW_STYLES = {
     shadowRadius: 25,
     shadowOffset: { width: 0, height: 20 },
     elevation: 8,
+  },
+  successInner: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   successCheck: {
     color: '#ffffff',
@@ -328,6 +380,60 @@ const RAW_STYLES = {
     fontSize: 16,
     fontWeight: '700',
     lineHeight: 28,
+  },
+  otpWrap: {
+    marginTop: 12,
+    width: '100%',
+    alignItems: 'center',
+    gap: 10,
+  },
+  // Peach pill: grey "OTP" followed by the orange dash + digits.
+  otpPill: {
+    marginBottom: 16,
+    backgroundColor: '#fdeee6',
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 22,
+    alignSelf: 'flex-end',
+  },
+  otpPillText: {
+    fontSize: 16,
+    lineHeight: 22,
+    textAlign: 'right',
+  },
+  otpPillLabel: {
+    color: '#8e8e8e',
+    fontSize: 16,
+    fontWeight: '500',
+    letterSpacing: 0.5,
+  },
+  otpPillDigits: {
+    color: '#fc5109',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  otpHint: {
+    color: '#363636',
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  otpWaiting: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fef3c7',
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  otpWaitingText: {
+    color: '#92400e',
+    fontSize: 12,
+    fontWeight: '600',
+    lineHeight: 16,
   },
   pendingCircle: {
     backgroundColor: '#fbbf24',

@@ -1,10 +1,11 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { PageFrame } from '../components/PageFrame';
 import { BottomTabs, type TabKey } from '../components/BottomTabs';
 import { COLORS } from '../constants/theme';
 import type { Dashboard } from '../services/userApi';
 import { formatCurrency } from '../utils/format';
+import { useStyles } from '../utils/responsiveStyles';
 
 export function DashboardScreen({
   onBack,
@@ -21,6 +22,7 @@ export function DashboardScreen({
   onBookScooty: () => void;
   onViewBookings: () => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.root}>
       <PageFrame title="Dashboard" onBack={onBack} scroll={false}>
@@ -57,6 +59,7 @@ export function DashboardScreen({
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.stat}>
       <Text style={styles.statValue}>{value}</Text>
@@ -65,7 +68,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   root: { flex: 1, backgroundColor: COLORS.background },
   content: { paddingBottom: 16, flex: 1 },
   hero: {
@@ -107,4 +110,4 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   actionText: { color: COLORS.textPrimary, fontSize: 12, fontWeight: '700' },
-});
+} as const;

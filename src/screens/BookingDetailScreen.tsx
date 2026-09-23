@@ -102,7 +102,7 @@ export function BookingDetailScreen({
             value={startLabel && endLabel ? `${startLabel} → ${endLabel}` : startLabel || endLabel || '—'}
           />
           <Row label="Duration" value={duration} />
-          {booking.unlockCode ? <Row label="Unlock Code" value={booking.unlockCode} mono /> : null}
+          {booking.rideOtp ? <Row label="Ride OTP" value={booking.rideOtp} mono /> : null}
         </View>
 
         <View style={styles.card}>
@@ -285,7 +285,7 @@ const RAW_STYLES = {
     textAlign: 'right',
   },
   rowValueBold: { fontWeight: '700', fontSize: 16, color: '#101828' },
-  rowValueMono: { fontFamily: 'Courier', letterSpacing: 1 },
+  rowValueMono: { fontFamily: 'monospace', letterSpacing: 1 },
   stationRow: {
     flexDirection: 'row',
     alignItems: 'center',

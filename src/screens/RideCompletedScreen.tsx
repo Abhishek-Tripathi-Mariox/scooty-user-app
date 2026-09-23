@@ -1,8 +1,9 @@
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SafeAreaView, ScrollView, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
 import { CheckIcon, ClockIcon, ShieldIcon } from '../components/RideIcons';
+import { useStyles } from '../utils/responsiveStyles';
 
 export function RideCompletedScreen({
   onHome,
@@ -20,6 +21,7 @@ export function RideCompletedScreen({
   fare?: number;
   securityDeposit?: number;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const durationText = duration || '—';
   const distanceText = distance != null ? `${distance.toFixed(1)} km` : '—';
   const baseFare = fare ?? 0;
@@ -104,6 +106,7 @@ export function RideCompletedScreen({
 }
 
 function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.metric}>
       <View style={styles.metricIcon}>{icon}</View>
@@ -116,6 +119,7 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
 }
 
 function FareRow({ label, value }: { label: string; value: string }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.fareRow}>
       <Text style={styles.fareLabel}>{label}</Text>
@@ -148,7 +152,7 @@ function DownloadIcon({ color }: { color: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -391,4 +395,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 24,
   },
-});
+} as const;

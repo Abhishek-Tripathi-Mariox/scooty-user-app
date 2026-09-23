@@ -14,6 +14,7 @@ import { Camera, CameraType } from 'react-native-camera-kit';
 import Svg, { Path } from 'react-native-svg';
 import { GradientButton } from '../components/GradientButton';
 import { ArrowLeftIcon } from '../components/RideIcons';
+import { useStyles } from '../utils/responsiveStyles';
 import { STATUS_TOP_INSET } from '../utils/statusBarInset';
 
 export function ScanQRCodeScreen({
@@ -25,6 +26,7 @@ export function ScanQRCodeScreen({
   onScanned: (code: string) => void;
   expectedCode?: string;
 }) {
+  const styles = useStyles(RAW_STYLES);
   void expectedCode; // backend validates the unlock code
   const [permission, setPermission] = useState<'pending' | 'granted' | 'denied'>('pending');
   const [torchOn, setTorchOn] = useState(false);
@@ -170,7 +172,7 @@ const FRAME_SIZE = 256;
 const CORNER_SIZE = 48;
 const BORDER = 3.5;
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#0a0f1a',
@@ -340,4 +342,4 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     marginBottom: 4,
   },
-});
+} as const;

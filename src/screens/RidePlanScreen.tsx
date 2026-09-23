@@ -3,7 +3,6 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -16,6 +15,7 @@ import {
   ClockIcon,
   InfoIcon,
 } from '../components/RideIcons';
+import { useStyles } from '../utils/responsiveStyles';
 
 export type RidePlanId = 'hourly' | 'full-day' | 'weekly' | 'monthly';
 
@@ -44,6 +44,7 @@ export function RidePlanScreen({
   onSelectPlan?: (plan: RidePlanId) => void;
   plans?: RidePlan[];
 }) {
+  const styles = useStyles(RAW_STYLES);
   const availablePlans = plans ?? [];
   const activePlanId = selectedPlan || availablePlans[0]?.id || null;
   const activePlan = activePlanId
@@ -144,6 +145,7 @@ export function RidePlanScreen({
 }
 
 function InfoBox({ title, value }: { title: string; value: string }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.infoBox}>
       <View style={styles.infoIconWrap}>
@@ -157,7 +159,7 @@ function InfoBox({ title, value }: { title: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -343,4 +345,4 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.62)',
   },
-});
+} as const;

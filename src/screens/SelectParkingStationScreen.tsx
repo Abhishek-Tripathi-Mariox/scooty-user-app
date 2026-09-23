@@ -3,7 +3,6 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -14,6 +13,7 @@ import {
   SmallScooterIcon,
   WalkerIcon,
 } from '../components/RideIcons';
+import { useStyles } from '../utils/responsiveStyles';
 
 const StationThumb = require('../assets/images/station-thumb.jpg');
 
@@ -35,6 +35,7 @@ export function SelectParkingStationScreen({
   onSelectStation: (station: ParkingStation) => void;
   stations?: ParkingStation[];
 }) {
+  const styles = useStyles(RAW_STYLES);
   const list = stations ?? [];
 
   return (
@@ -111,7 +112,7 @@ function ArrowIcon({ color }: { color: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -232,4 +233,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
   },
-});
+} as const;

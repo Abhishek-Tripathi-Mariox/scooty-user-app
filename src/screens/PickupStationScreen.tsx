@@ -3,7 +3,6 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -17,6 +16,7 @@ import {
   SmallScooterIcon,
   WalkerIcon,
 } from '../components/RideIcons';
+import { useStyles } from '../utils/responsiveStyles';
 
 const StationThumb = require('../assets/images/station-thumb.jpg');
 
@@ -48,6 +48,7 @@ export function PickupStationScreen({
   scheduleLabel?: string;
   mode?: 'pickup' | 'drop';
 }) {
+  const styles = useStyles(RAW_STYLES);
   const list = stations ?? [];
   const activeId = selectedStationId || list[0]?.id || null;
   const activeStation = list.find((station) => station.id === activeId) || list[0];
@@ -153,6 +154,7 @@ function Stat({
   label: string;
   value: string;
 }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.statBlock}>
       <View style={styles.statRow}>
@@ -164,7 +166,7 @@ function Stat({
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -336,4 +338,4 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.62)',
   },
-});
+} as const;

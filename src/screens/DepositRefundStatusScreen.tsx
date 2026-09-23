@@ -1,7 +1,8 @@
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SafeAreaView, ScrollView, Text, View } from 'react-native';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
 import { ArrowLeftIcon, CheckIcon, ClockIcon, SmallInfoIcon } from '../components/RideIcons';
+import { useStyles } from '../utils/responsiveStyles';
 
 export function DepositRefundStatusScreen({
   onBack,
@@ -18,6 +19,7 @@ export function DepositRefundStatusScreen({
   transactionId?: string;
   expectedDate?: string;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const steps = [
     { label: 'Ride Completed', subtitle: 'February 19, 2026 at 2:45 PM', state: 'done' as const },
     { label: 'Verification Complete', subtitle: 'Vehicle inspected successfully', state: 'done' as const },
@@ -156,6 +158,7 @@ function Row({
   valueColor?: string;
   boldLabel?: boolean;
 }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.rowFlex}>
       <Text style={[styles.rowLabel, boldLabel && styles.rowLabelBold]}>{label}</Text>
@@ -164,7 +167,7 @@ function Row({
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -396,7 +399,7 @@ const styles = StyleSheet.create({
     color: '#101828',
     fontSize: 12,
     fontWeight: '700',
-    fontFamily: 'Courier',
+    fontFamily: 'monospace',
   },
   yellowCard: {
     flexDirection: 'row',
@@ -441,4 +444,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 24,
   },
-});
+} as const;

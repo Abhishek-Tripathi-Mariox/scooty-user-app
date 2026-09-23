@@ -1,6 +1,8 @@
 import { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { FONTS } from '../constants/fonts';
+import { useStyles } from '../utils/responsiveStyles';
 
 export function GradientButton({
   label,
@@ -10,6 +12,7 @@ export function GradientButton({
   height = 48,
   radius = 12,
   leftIcon,
+  rightIcon,
   labelStyle,
 }: {
   label: string;
@@ -19,8 +22,10 @@ export function GradientButton({
   height?: number;
   radius?: number;
   leftIcon?: ReactNode;
+  rightIcon?: ReactNode;
   labelStyle?: import('react-native').TextStyle;
 }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <Pressable
       onPress={onPress}
@@ -46,11 +51,12 @@ export function GradientButton({
       </View>
       {leftIcon ? <View style={styles.leftIcon}>{leftIcon}</View> : null}
       <Text style={[styles.label, labelStyle]}>{label}</Text>
+      {rightIcon ? <View style={styles.rightIcon}>{rightIcon}</View> : null}
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   button: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -65,17 +71,20 @@ const styles = StyleSheet.create({
   leftIcon: {
     marginRight: 8,
   },
+  rightIcon: {
+    marginLeft: 8,
+  },
   pressed: {
     opacity: 0.92,
   },
   disabled: {
-    opacity: 0.55,
+    opacity: 0.5,
   },
   label: {
     color: '#ffffff',
+    fontFamily: FONTS.medium,
     fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 0.2,
+    fontWeight: '500',
     lineHeight: 20,
   },
-});
+} as const;

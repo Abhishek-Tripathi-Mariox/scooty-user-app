@@ -1,9 +1,10 @@
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, SafeAreaView, ScrollView, Text, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { AppBackground } from '../components/AppBackground';
 import { BottomTabs, type TabKey } from '../components/BottomTabs';
 import { ArrowLeftIcon, CheckIcon } from '../components/RideIcons';
 import type { NotificationItem } from '../services/userApi';
+import { useStyles } from '../utils/responsiveStyles';
 
 type NotifRow = {
   id: string;
@@ -32,6 +33,7 @@ export function NotificationScreen({
   loading?: boolean;
   activeTab: TabKey;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const groups: NotifGroup[] = buildGroups(notifications || []);
 
   return (
@@ -185,7 +187,7 @@ function buildGroups(notifications: NotificationItem[]): NotifGroup[] {
   return groups.filter((g) => g.items.length > 0);
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -284,4 +286,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
-});
+} as const;
