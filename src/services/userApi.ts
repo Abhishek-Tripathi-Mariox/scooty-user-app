@@ -1,13 +1,14 @@
 import { Platform } from 'react-native';
 
-// LAN IP of the dev machine so physical devices can reach the local backend.
-// Use 10.0.2.2 instead when running on the Android emulator.
+// USB device: requires `adb reverse tcp:3000 tcp:3000` (router blocks LAN
+// access to the PC). Android emulator alternative: 10.0.2.2. Wi-Fi-only
+// device: LAN IP of the dev machine.
 const LOCAL_USER_API_BASE_URL =
   Platform.select({
-    android: 'http://192.168.68.109:3000/v1/api',
-    ios: 'http://192.168.68.112:3000/v1/api',
-    default: 'http://localhost:3000/v1/api',
-  }) || 'http://192.168.68.112:3000/v1/api';
+    android: 'http://192.168.1.37:3000/v1/api',
+    ios: 'http://192.168.1.37:3000/v1/api',
+    default: 'http://192.168.1.37:3000/v1/api',
+  }) || 'http://192.168.1.37:3000/v1/api';
 
 const HOSTED_USER_API_BASE_URL: string = 'https://backend.slydomobility.com/v1/api';
 
@@ -48,8 +49,10 @@ export type User = {
   kycRejectionReason?: string;
   kycSubmittedAt?: string;
   kycVerifiedAt?: string;
-  adharFile?: string;
-  panFile?: string;
+  adharFile?: string; // Aadhaar front
+  adharBackFile?: string;
+  drivingLicenseFile?: string;
+  panFile?: string; // optional
   settings?: UserSettings;
 };
 
@@ -61,13 +64,19 @@ export type UserKyc = {
   documents?: {
     profilePhotoUrl?: string;
     adharFile?: string;
+    adharBackFile?: string;
+    drivingLicenseFile?: string;
     panFile?: string;
   };
 };
 
+// Rider KYC uploads. Aadhaar front + back, driving licence and profile photo
+// are mandatory; PAN is optional.
 export type KycUploadFiles = {
   profilePhoto?: KycUploadFile | null;
-  adharFile?: KycUploadFile | null;
+  adharFile?: KycUploadFile | null; // Aadhaar front
+  adharBackFile?: KycUploadFile | null;
+  drivingLicenseFile?: KycUploadFile | null;
   panFile?: KycUploadFile | null;
 };
 
@@ -147,6 +156,8 @@ export type RideItem = {
     paidAt?: string;
   };
   unlockCode?: string;
+  rideOtp?: string;
+  rideOtpIssuedAt?: string;
   rideStartedAt?: string;
   actualDurationMinutes?: number;
   pickupStation?: StationItem;
@@ -269,6 +280,8 @@ export type BookingItem = {
     paidAt?: string;
   };
   unlockCode?: string;
+  rideOtp?: string;
+  rideOtpIssuedAt?: string;
   rideStartedAt?: string;
   refund?: {
     status?: string;
@@ -500,6 +513,8 @@ export const userApi = {
     };
     append('profilePhoto', files.profilePhoto);
     append('adharFile', files.adharFile);
+    append('adharBackFile', files.adharBackFile);
+    append('drivingLicenseFile', files.drivingLicenseFile);
     append('panFile', files.panFile);
 
     return request<{ kyc: UserKyc }>('/user/kyc', {
@@ -626,11 +641,12 @@ export const userApi = {
       token,
       body: payload,
     }),
-  startRide: (token: string, bookingId: string, payload: { unlockCode?: string } = {}) =>
-    request<{ booking: BookingItem }>(`/user/bookings/${bookingId}/start`, {
+  // Ride start happens on the station admin panel. The rider requests a fixed
+  // 4-digit OTP here and tells it to the admin at pickup.
+  requestRideOtp: (token: string, bookingId: string) =>
+    request<{ booking: BookingItem }>(`/user/bookings/${bookingId}/ride-otp`, {
       method: 'POST',
       token,
-      body: payload,
     }),
   completeRide: (
     token: string,

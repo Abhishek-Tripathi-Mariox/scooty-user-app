@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   SafeAreaView,
-  StyleSheet,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -10,6 +12,7 @@ import {
 import Svg, { Path } from 'react-native-svg';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
+import { useStyles } from '../utils/responsiveStyles';
 
 const RATING_LABELS = ['Poor', 'Fair', 'Good', 'Very Good', 'Excellent'];
 
@@ -21,6 +24,7 @@ export function RateYourExperienceScreen({
   onSubmit: (rating: number, feedback: string) => void;
   onSkip: () => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const [rating, setRating] = useState(5);
   const [feedback, setFeedback] = useState('');
 
@@ -28,44 +32,55 @@ export function RateYourExperienceScreen({
     <SafeAreaView style={styles.safe}>
       <AppBackground variant="auth" />
 
-      <View style={styles.topCard}>
-        <Text style={styles.title}>Rate Your Experience</Text>
-        <Text style={styles.subtitle}>Your feedback helps us improve</Text>
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.ratingBlock}>
-          <View style={styles.starsRow}>
-            {[1, 2, 3, 4, 5].map((i) => (
-              <Pressable key={i} onPress={() => setRating(i)} style={styles.starWrap}>
-                <StarIcon filled={i <= rating} size={32} />
-              </Pressable>
-            ))}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.topCard}>
+            <Text style={styles.title}>Rate Your Experience</Text>
+            <Text style={styles.subtitle}>Your feedback helps us improve</Text>
           </View>
-          <Text style={styles.ratingLabel}>{RATING_LABELS[rating - 1]}</Text>
-        </View>
 
-        <View style={styles.feedbackBlock}>
-          <Text style={styles.feedbackTitle}>Additional Feedback (Optional)</Text>
-          <View style={styles.textareaWrap}>
-            <TextInput
-              style={styles.textarea}
-              multiline
-              placeholder="Share your experience..."
-              placeholderTextColor="#9ca3af"
-              value={feedback}
-              onChangeText={setFeedback}
-            />
+          <View style={styles.content}>
+            <View style={styles.ratingBlock}>
+              <View style={styles.starsRow}>
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Pressable key={i} onPress={() => setRating(i)} style={styles.starWrap}>
+                    <StarIcon filled={i <= rating} size={32} />
+                  </Pressable>
+                ))}
+              </View>
+              <Text style={styles.ratingLabel}>{RATING_LABELS[rating - 1]}</Text>
+            </View>
+
+            <View style={styles.feedbackBlock}>
+              <Text style={styles.feedbackTitle}>Additional Feedback (Optional)</Text>
+              <View style={styles.textareaWrap}>
+                <TextInput
+                  style={styles.textarea}
+                  multiline
+                  placeholder="Share your experience..."
+                  placeholderTextColor="#9ca3af"
+                  value={feedback}
+                  onChangeText={setFeedback}
+                />
+              </View>
+            </View>
           </View>
-        </View>
-      </View>
 
-      <View style={styles.footer}>
-        <GradientButton label="Submit Feedback" onPress={() => onSubmit(rating, feedback)} height={52} />
-        <Pressable style={styles.skipButton} onPress={onSkip}>
-          <Text style={styles.skipText}>Skip</Text>
-        </Pressable>
-      </View>
+          <View style={styles.footer}>
+            <GradientButton label="Submit Feedback" onPress={() => onSubmit(rating, feedback)} height={52} />
+            <Pressable style={styles.skipButton} onPress={onSkip}>
+              <Text style={styles.skipText}>Skip</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -79,7 +94,7 @@ function StarIcon({ filled, size }: { filled: boolean; size: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -110,7 +125,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 32,
     gap: 32,
@@ -179,4 +194,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 24,
   },
-});
+} as const;

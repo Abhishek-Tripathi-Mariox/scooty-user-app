@@ -2,7 +2,6 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -12,6 +11,7 @@ import { BottomTabs, type TabKey } from '../components/BottomTabs';
 import { ScooterIcon } from '../components/HomeIcons';
 import { ArrowLeftIcon, ClockIcon } from '../components/RideIcons';
 import type { RideItem } from '../services/userApi';
+import { useStyles } from '../utils/responsiveStyles';
 
 type HistoryRow = {
   id: string;
@@ -38,6 +38,7 @@ export function RideHistoryScreen({
   activeTab: TabKey;
   onOpenRide: (ride: RideItem) => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const formatDuration = (r: RideItem): string => {
     const minutes = r.actualDurationMinutes;
     if (typeof minutes === 'number' && minutes > 0) {
@@ -157,7 +158,7 @@ function ReceiptIcon({ color }: { color: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -291,4 +292,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+} as const;

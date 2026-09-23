@@ -4,7 +4,6 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -17,6 +16,7 @@ import {
   BatteryIcon,
   WalletCardIcon,
 } from '../components/RideIcons';
+import { useStyles } from '../utils/responsiveStyles';
 
 const ScooterPhoto = require('../assets/images/preride-scooter.jpg');
 
@@ -57,6 +57,7 @@ export function PreRideScreen({
   walletBalance?: number;
   loading?: boolean;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const [destination, setDestination] = useState<string | null>(null);
   const hasBattery = scootyBattery != null && Number.isFinite(scootyBattery);
   const batteryText = hasBattery ? `${scootyBattery}%` : '—';
@@ -299,7 +300,7 @@ function GaugeIcon({ color }: { color: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -539,4 +540,4 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     textAlign: 'center',
   },
-});
+} as const;

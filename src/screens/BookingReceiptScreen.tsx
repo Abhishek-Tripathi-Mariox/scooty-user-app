@@ -274,5 +274,5 @@ const RAW_STYLES = {
     textAlign: 'right',
   },
   rowValueBold: { fontWeight: '700', fontSize: 16 },
-  rowValueMono: { fontFamily: 'Courier', letterSpacing: 1 },
+  rowValueMono: { fontFamily: 'monospace', letterSpacing: 1 },
 } as const;

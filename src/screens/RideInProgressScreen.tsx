@@ -4,6 +4,7 @@ import {
   Modal,
   Pressable,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -12,6 +13,7 @@ import Geolocation from '@react-native-community/geolocation';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { BatteryIcon, CalendarIcon, ClockIcon } from '../components/RideIcons';
 import { requestLocationPermission } from '../utils/location';
+import { useStyles } from '../utils/responsiveStyles';
 import { STATUS_TOP_INSET } from '../utils/statusBarInset';
 
 const RideScene = require('../assets/images/preride-scooter.jpg');
@@ -65,6 +67,7 @@ export function RideInProgressScreen({
   startedAt?: string | null;
   endAt?: string | null;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const [sosOpen, setSosOpen] = useState(false);
   const [paused, setPaused] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -128,68 +131,75 @@ export function RideInProgressScreen({
       <Image source={RideScene} style={styles.heroImage} blurRadius={5} resizeMode="cover" />
       <View style={styles.overlay} />
 
-      <View style={styles.topBlock}>
-        <View style={styles.planRow}>
-          <View style={styles.planIcon}>
-            <CalendarIcon size={18} color="#ffffff" />
-          </View>
-          <View style={styles.planText}>
-            <Text style={styles.planLabel}>Active Plan</Text>
-            <Text style={styles.planName}>{planName}</Text>
-          </View>
-          <View style={styles.timeLeftChip}>
-            <Text style={styles.timeLeftText}>{timeLeft}</Text>
-          </View>
-        </View>
-
-        <View style={styles.statsRow}>
-          <StatCard icon={<ClockIcon size={22} color="#22c55e" />} label="Duration" value={rideTime} />
-          <StatCard icon={<GaugeIcon color="#22c55e" />} label="Speed" value={`${speed} km/h`} />
-          <StatCard icon={<BatteryIcon size={22} color="#22c55e" />} label="Battery" value={batteryText} />
-        </View>
-      </View>
-
-      <View style={styles.dial}>
-        <Text style={styles.dialValue}>{speed}</Text>
-        <Text style={styles.dialUnit}>km/h</Text>
-        <Text style={styles.dialDistance}>{distanceText}</Text>
-      </View>
-
-      <View style={styles.bottomBlock}>
-        <View style={styles.bottomInner}>
-          <View style={styles.sessionRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.sessionLabel}>Current Session</Text>
-              <Text style={styles.sessionTime}>{rideTime}</Text>
-              <Text style={styles.sessionDistance}>{distanceText} traveled</Text>
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.topBlock}>
+          <View style={styles.planRow}>
+            <View style={styles.planIcon}>
+              <CalendarIcon size={18} color="#ffffff" />
             </View>
-            <Pressable
-              style={styles.sosButton}
-              onPress={() => {
-                setSosOpen(true);
-                onEmergency?.();
-              }}
-            >
-              <Text style={styles.sosText}>SOS</Text>
-            </Pressable>
+            <View style={styles.planText}>
+              <Text style={styles.planLabel}>Active Plan</Text>
+              <Text style={styles.planName}>{planName}</Text>
+            </View>
+            <View style={styles.timeLeftChip}>
+              <Text style={styles.timeLeftText}>{timeLeft}</Text>
+            </View>
           </View>
 
-          <View style={styles.actionsRow}>
-            <Pressable
-              style={styles.pauseButton}
-              onPress={() => {
-                setPaused((p) => !p);
-                onPauseResume?.();
-              }}
-            >
-              <Text style={styles.pauseText}>{paused ? 'Resume Ride' : 'Pause Ride'}</Text>
-            </Pressable>
-            <Pressable style={styles.endButton} onPress={onEndRide}>
-              <Text style={styles.endText}>End Ride</Text>
-            </Pressable>
+          <View style={styles.statsRow}>
+            <StatCard icon={<ClockIcon size={22} color="#22c55e" />} label="Duration" value={rideTime} />
+            <StatCard icon={<GaugeIcon color="#22c55e" />} label="Speed" value={`${speed} km/h`} />
+            <StatCard icon={<BatteryIcon size={22} color="#22c55e" />} label="Battery" value={batteryText} />
           </View>
         </View>
-      </View>
+
+        <View style={styles.dialWrap}>
+          <View style={styles.dial}>
+            <Text style={styles.dialValue}>{speed}</Text>
+            <Text style={styles.dialUnit}>km/h</Text>
+            <Text style={styles.dialDistance}>{distanceText}</Text>
+          </View>
+        </View>
+
+        <View style={styles.bottomBlock}>
+          <View style={styles.bottomInner}>
+            <View style={styles.sessionRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sessionLabel}>Current Session</Text>
+                <Text style={styles.sessionTime}>{rideTime}</Text>
+                <Text style={styles.sessionDistance}>{distanceText} traveled</Text>
+              </View>
+              <Pressable
+                style={styles.sosButton}
+                onPress={() => {
+                  setSosOpen(true);
+                  onEmergency?.();
+                }}
+              >
+                <Text style={styles.sosText}>SOS</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.actionsRow}>
+              <Pressable
+                style={styles.pauseButton}
+                onPress={() => {
+                  setPaused((p) => !p);
+                  onPauseResume?.();
+                }}
+              >
+                <Text style={styles.pauseText}>{paused ? 'Resume Ride' : 'Pause Ride'}</Text>
+              </Pressable>
+              <Pressable style={styles.endButton} onPress={onEndRide}>
+                <Text style={styles.endText}>End Ride</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
 
       <SosModal visible={sosOpen} onClose={() => setSosOpen(false)} />
     </SafeAreaView>
@@ -197,6 +207,7 @@ export function RideInProgressScreen({
 }
 
 function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.statCard}>
       {icon}
@@ -207,6 +218,7 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
 }
 
 function SosModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.sosOverlay} onPress={onClose} />
@@ -267,7 +279,7 @@ function PhoneIcon({ color }: { color: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#111827',
@@ -356,11 +368,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 22,
   },
+  dialWrap: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   dial: {
-    position: 'absolute',
-    left: '50%',
-    marginLeft: -96,
-    top: '42%',
     width: 192,
     height: 192,
     borderRadius: 96,
@@ -388,10 +401,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   bottomBlock: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
     paddingHorizontal: 16,
     paddingBottom: 16,
   },
@@ -564,4 +573,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 24,
   },
-});
+} as const;

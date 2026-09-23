@@ -18,6 +18,8 @@ import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
 import { ArrowLeftIcon } from '../components/RideIcons';
 import type { KycUploadFile } from '../services/userApi';
+import { useBottomInset } from '../utils/insets';
+import { useStyles } from '../utils/responsiveStyles';
 
 export function ParkingConfirmationScreen({
   onBack,
@@ -29,6 +31,8 @@ export function ParkingConfirmationScreen({
   onConfirmParking: (photo: KycUploadFile | null) => void;
   photoTaken?: boolean;
 }) {
+  const styles = useStyles(RAW_STYLES);
+  const bottomInset = useBottomInset();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [capturing, setCapturing] = useState(false);
@@ -141,7 +145,7 @@ export function ParkingConfirmationScreen({
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: 16 + bottomInset }]}>
         {canEndRide ? (
           <GradientButton
             label="End Ride"
@@ -205,7 +209,7 @@ function CameraIcon({ color, size = 32 }: { color: string; size?: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -430,4 +434,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 28,
   },
-});
+} as const;

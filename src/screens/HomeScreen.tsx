@@ -21,6 +21,7 @@ import { ScreenSurface } from '../components/ScreenSurface';
 import type { Dashboard, User } from '../services/userApi';
 import type { PickupStation } from './PickupStationScreen';
 import { useResponsiveLayout } from '../utils/responsive';
+import { useStyles } from '../utils/responsiveStyles';
 import { STATUS_TOP_INSET } from '../utils/statusBarInset';
 
 const ScootyImage = require('../assets/images/scooty-3d.png');
@@ -59,6 +60,7 @@ export function HomeScreen({
   onLocationPress?: () => void;
   onWalletPress?: () => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const layout = useResponsiveLayout();
   const city = user?.settings?.location?.city || user?.city || 'Kuala lumpur, Malaysia';
   const nearbyStations = (stations ?? []).slice(0, 5);
@@ -109,7 +111,10 @@ export function HomeScreen({
     { useNativeDriver: true },
   );
 
-  const mapHeight = MAP_HEIGHT + STATUS_BAR_PAD;
+  // Tall phones get a taller map instead of a stubby one with extra empty
+  // space under the carousel; short phones keep the design's 250dp minimum.
+  const mapBase = Math.min(340, Math.max(MAP_HEIGHT, Math.round(layout.screenHeight * 0.33)));
+  const mapHeight = mapBase + STATUS_BAR_PAD;
 
   return (
     <ScreenSurface>
@@ -192,7 +197,7 @@ export function HomeScreen({
               disableIntervalMomentum
               scrollEventThrottle={16}
               onScroll={handleScroll}
-              contentContainerStyle={{ paddingHorizontal: sideInset, paddingTop: 20, paddingBottom: 32 }}
+              contentContainerStyle={{ paddingHorizontal: sideInset, paddingTop: 16, paddingBottom: 18 }}
               ItemSeparatorComponent={() => <View style={{ width: carouselGap }} />}
               onMomentumScrollEnd={handleMomentumEnd}
               renderItem={({ item, index }) => {
@@ -301,6 +306,7 @@ function WalletCardGlyph() {
 }
 
 function PeopleIcon() {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.peopleIconWrap}>
       <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
@@ -324,6 +330,7 @@ function PeopleIcon() {
 }
 
 function StatPill({ icon, label }: { icon: React.ReactNode; label: string }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.statPill}>
       {icon}
@@ -349,6 +356,7 @@ function StationCard({
   parallax?: Animated.AnimatedInterpolation<number>;
   onPress: () => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const artSize = 150;
   const overlap = 96;
 
@@ -388,24 +396,26 @@ function StationCard({
         />
       </View>
 
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.stationArtWrap,
-          artTransforms.length > 0 ? { transform: artTransforms as never } : null,
-        ]}
-      >
-        <Image
-          source={ScootyImage}
-          style={{ width: artSize * 1.25, height: artSize }}
-          resizeMode="contain"
-        />
-      </Animated.View>
+      {station.available > 0 ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.stationArtWrap,
+            artTransforms.length > 0 ? { transform: artTransforms as never } : null,
+          ]}
+        >
+          <Image
+            source={ScootyImage}
+            style={{ width: artSize * 1.25, height: artSize }}
+            resizeMode="contain"
+          />
+        </Animated.View>
+      ) : null}
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   root: {
     flex: 1,
   },
@@ -663,4 +673,4 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-});
+} as const;

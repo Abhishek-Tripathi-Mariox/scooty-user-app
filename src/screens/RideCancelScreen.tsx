@@ -13,6 +13,7 @@ import { AppBackground } from '../components/AppBackground';
 import { BottomTabs, type TabKey } from '../components/BottomTabs';
 import { GradientButton } from '../components/GradientButton';
 import { ArrowLeftIcon } from '../components/RideIcons';
+import { useStyles } from '../utils/responsiveStyles';
 
 const REASONS = [
   'Change in plan / timing',
@@ -39,6 +40,7 @@ export function RideCancelScreen({
   activeTab: TabKey;
   onTabPress: (tab: TabKey) => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const [selectedReason, setSelectedReason] = useState(REASONS[0]);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -113,6 +115,7 @@ function ConfirmCancelDialog({
   onKeep: () => void;
   onCancel: () => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onKeep}>
       <Pressable style={styles.dialogOverlay} onPress={onKeep} />
@@ -147,7 +150,7 @@ function XIcon({ size, color }: { size: number; color: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -311,4 +314,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 20,
   },
-});
+} as const;

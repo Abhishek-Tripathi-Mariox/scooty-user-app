@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, AppState, NativeModules, Platform, StyleSheet, Text, View } from 'react-native';
 import DocumentPicker from 'react-native-document-picker';
 import { LoginScreen } from './src/screens/LoginScreen';
@@ -6,6 +6,7 @@ import { OtpScreen } from './src/screens/OtpScreen';
 import { RegisterScreen } from './src/screens/RegisterScreen';
 import { KycScreen } from './src/screens/KycScreen';
 import { PendingApprovalScreen } from './src/screens/PendingApprovalScreen';
+import { AccountActivatedSheet } from './src/components/AccountActivatedSheet';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { EditLocationScreen } from './src/screens/EditLocationScreen';
 import { PermissionsScreen } from './src/screens/PermissionsScreen';
@@ -24,7 +25,6 @@ import { MyWalletScreen } from './src/screens/MyWalletScreen';
 import { DepositRefundStatusScreen } from './src/screens/DepositRefundStatusScreen';
 import { RideCompletedScreen } from './src/screens/RideCompletedScreen';
 import { RateYourExperienceScreen } from './src/screens/RateYourExperienceScreen';
-import { ScanQRCodeScreen } from './src/screens/ScanQRCodeScreen';
 import { RideInProgressScreen } from './src/screens/RideInProgressScreen';
 import { ParkingConfirmationScreen } from './src/screens/ParkingConfirmationScreen';
 import { SelectParkingStationScreen } from './src/screens/SelectParkingStationScreen';
@@ -68,6 +68,7 @@ type AppStep =
   | 'register'
   | 'kyc'
   | 'pending-approval'
+  | 'activated'
   | 'permissions'
   | 'dashboard'
   | 'edit-location'
@@ -123,7 +124,8 @@ const canStartScheduledRide = (booking?: BookingItem | null) => {
   const startMs = new Date(scheduledStartAt).getTime();
   if (Number.isNaN(startMs)) return true;
 
-  return Date.now() >= startMs;
+  // Backend allows the ride OTP up to 5 minutes before the scheduled start.
+  return Date.now() >= startMs - 5 * 60 * 1000;
 };
 
 const normalizeBookingResponse = (booking?: BookingItem | null): BookingItem | null => {
@@ -276,6 +278,12 @@ const formatScheduleLabel = (selection?: { date: string; time: string; duration:
 export default function App() {
   // Auth state
   const [step, setStep] = useState<AppStep>('splash');
+  // The splash + "Swipe to get started" always plays on launch, logged in or
+  // not. Auth bootstrap only decides where the swipe lands (dashboard, kyc,
+  // login, ...); the step itself changes once the user swipes.
+  const [postSplashStep, setPostSplashStep] = useState<AppStep>('login');
+  const [splashDone, setSplashDone] = useState(false);
+  const handleSplashDone = useCallback(() => setSplashDone(true), []);
   const [mobileNumber, setMobileNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
@@ -308,6 +316,9 @@ export default function App() {
     appliedReferral?: string | null;
   } | null>(null);
   const [selectedBookingDetail, setSelectedBookingDetail] = useState<BookingItem | null>(null);
+  // Where the Bookings screen's back arrow returns: the tab bar opens it from
+  // Home, the Profile/Settings menu opens it from Profile.
+  const [bookingsReturnStep, setBookingsReturnStep] = useState<'dashboard' | 'profile'>('dashboard');
   const [receiptBooking, setReceiptBooking] = useState<BookingItem | null>(null);
   const [cancelTarget, setCancelTarget] = useState<BookingItem | null>(null);
   const [selectedRide, setSelectedRide] = useState<RideItem | null>(null);
@@ -318,6 +329,8 @@ export default function App() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<{ date: string; time: string; duration: string } | null>(null);
   const [availableRidePlans, setAvailableRidePlans] = useState<RidePlan[]>([]);
   const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlotItem[]>([]);
+  // Date id ('today' | 'tomorrow' | 'YYYY-MM-DD') currently selected on the time-slot screen.
+  const [slotDateId, setSlotDateId] = useState('today');
   const [bookingQuote, setBookingQuote] = useState<BookingQuote | null>(null);
   const [createdBooking, setCreatedBooking] = useState<BookingItem | null>(null);
   const [bookingBusy, setBookingBusy] = useState(false);
@@ -454,7 +467,7 @@ export default function App() {
 
         const kycStatus = result.user?.kycStatus;
         if (kycStatus === 'PENDING' || kycStatus === 'REJECTED') {
-          setStep('pending-approval');
+          setPostSplashStep('pending-approval');
           return;
         }
         if (kycStatus !== 'APPROVED') {
@@ -470,20 +483,20 @@ export default function App() {
               city: result.user?.city || '',
               acceptedTerms: false,
             });
-            setStep('register');
+            setPostSplashStep('register');
             return;
           }
-          setStep('kyc');
+          setPostSplashStep('kyc');
           return;
         }
 
         if (hasCompletedPermissions(result.user?.settings)) {
           setActiveTab('home');
-          setStep('dashboard');
+          setPostSplashStep('dashboard');
           return;
         }
 
-        setStep('permissions');
+        setPostSplashStep('permissions');
       } catch (error) {
         // Only drop the saved session when the token is actually invalid.
         // A network failure (backend down / no internet) must not log the
@@ -506,6 +519,13 @@ export default function App() {
     };
   }, []);
 
+  // Leave the splash only after the user swiped AND the session check finished.
+  useEffect(() => {
+    if (!splashDone || isBootstrapping) return;
+    setStep(postSplashStep);
+  }, [splashDone, isBootstrapping, postSplashStep]);
+
+
   useEffect(() => {
     if (token) {
       loadUserData();
@@ -525,12 +545,9 @@ export default function App() {
         const freshUser = await refreshKycStatus(token);
         if (!active) return;
         if (freshUser?.kycStatus === 'APPROVED') {
-          if (hasCompletedPermissions(freshUser.settings)) {
-            setActiveTab('home');
-            setStep('dashboard');
-          } else {
-            setStep('permissions');
-          }
+          // Show the "Account Activated" sheet first; its button decides
+          // between the permissions step and the dashboard.
+          setStep('activated');
         }
       } finally {
         inFlight = false;
@@ -556,19 +573,27 @@ export default function App() {
   useEffect(() => {
     if (!token || step !== 'time-slot') return;
     const selectedPlanCode = resolveRidePlanCode(selectedRidePlan);
+    let active = true;
     void userApi
       .timeSlots(token, {
+        date: resolveBookingDate(slotDateId),
         planCode: selectedPlanCode,
         stationId: selectedPickupStation?.id,
       })
       .then((result) => {
+        if (!active) return;
         setAvailableTimeSlots(result.slots || []);
         if (result.plan) {
           setSelectedRidePlan(mapBackendPlanToRidePlan(result.plan));
         }
       })
-      .catch(() => setAvailableTimeSlots([]));
-  }, [selectedPickupStation?.id, selectedRidePlan?.id, step, token]);
+      .catch(() => {
+        if (active) setAvailableTimeSlots([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedPickupStation?.id, selectedRidePlan?.id, slotDateId, step, token]);
 
   useEffect(() => {
     if (!token || step !== 'bookings') return;
@@ -601,7 +626,8 @@ export default function App() {
   useEffect(() => {
     if (!token || step !== 'booking-confirmed') return;
     const bookingId = createdBooking?._id;
-    if (!bookingId || createdBooking?.status !== 'PENDING_PAYMENT') return;
+    const watchedStatus = createdBooking?.status;
+    if (!bookingId || (watchedStatus !== 'PENDING_PAYMENT' && watchedStatus !== 'CONFIRMED')) return;
     let active = true;
 
     const check = async () => {
@@ -614,7 +640,19 @@ export default function App() {
           setStep('bookings');
           return;
         }
-        if (result.booking.status !== 'PENDING_PAYMENT') {
+        if (result.booking.status === 'ACTIVE') {
+          // Station admin verified the rider's OTP and started the ride.
+          setCreatedBooking(result.booking);
+          setSelectedRide({
+            ...result.booking,
+            status: 'ongoing',
+            distance: 0,
+            fare: result.booking.pricing?.totalPayable,
+          });
+          setStep('ride-progress');
+          return;
+        }
+        if (result.booking.status !== watchedStatus) {
           setCreatedBooking(result.booking);
         }
       } catch {
@@ -1021,10 +1059,19 @@ export default function App() {
 
   const handleSubmitKyc = async () => {
     if (!token) return;
-    if (!kycFiles.profilePhoto || !kycFiles.adharFile || !kycFiles.panFile) {
+    // Mandatory: Aadhaar front + back, driving licence, profile photo. A
+    // document already on file (e.g. re-submitting after a rejection) counts.
+    // PAN is optional.
+    const hasDoc = (picked?: KycUploadFile | null, existing?: string) => Boolean(picked || existing);
+    if (
+      !hasDoc(kycFiles.adharFile, user?.adharFile) ||
+      !hasDoc(kycFiles.adharBackFile, user?.adharBackFile) ||
+      !hasDoc(kycFiles.drivingLicenseFile, user?.drivingLicenseFile) ||
+      !hasDoc(kycFiles.profilePhoto, user?.profilePhotoUrl)
+    ) {
       Alert.alert(
-        'Select all documents',
-        'Please upload Aadhaar, PAN, and profile photo before submitting.',
+        'Documents required',
+        'Please upload Aadhaar card (front and back), driving license and a profile photo before submitting. PAN card is optional.',
       );
       return;
     }
@@ -1060,6 +1107,7 @@ export default function App() {
         setStep('dashboard');
         break;
       case 'booking':
+        setBookingsReturnStep('dashboard');
         setStep('bookings');
         break;
       case 'notification':
@@ -1105,6 +1153,7 @@ export default function App() {
   const handleProfileMenuPress = (key: 'language' | 'bookings' | 'history' | 'offers' | 'support') => {
     switch (key) {
       case 'bookings':
+        setBookingsReturnStep('profile');
         setStep('bookings');
         break;
       case 'history':
@@ -1425,22 +1474,34 @@ export default function App() {
     }
   };
 
-  // Start Ride always goes through the full flow:
-  // Confirm Ride (pre-ride) → Scan QR → ride starts.
-  const handleStartRide = () => {
-    const currentBooking = createdBooking || selectedRide;
-    if (!currentBooking?._id) {
+  // Start Ride = request the fixed ride OTP. The rider shows it to the station
+  // admin, who starts the ride from the panel; the app polls until ACTIVE.
+  const requestRideOtpFor = async (booking?: BookingItem | null) => {
+    if (!token || !booking?._id) {
       Alert.alert('Cannot start ride', 'Booking is not ready yet. Please try again.');
       return;
     }
-    if (!canStartScheduledRide(currentBooking)) {
+    if (!canStartScheduledRide(booking)) {
       Alert.alert(
         'Ride not started yet',
-        'This booking is scheduled for a future time. You can start it only when the booked time begins.',
+        'This booking is scheduled for a future time. You can get the ride OTP up to 5 minutes before the booked time.',
       );
       return;
     }
-    setStep('pre-ride');
+    try {
+      setBookingBusy(true);
+      const result = await userApi.requestRideOtp(token, booking._id);
+      setCreatedBooking(result.booking);
+      setStep('booking-confirmed');
+    } catch (error) {
+      Alert.alert('Could not get ride OTP', userApiErrorMessage(error));
+    } finally {
+      setBookingBusy(false);
+    }
+  };
+
+  const handleStartRide = () => {
+    void requestRideOtpFor(createdBooking || selectedRide);
   };
 
   const handleViewBookingDetails = (booking: BookingItem) => {
@@ -1451,34 +1512,6 @@ export default function App() {
   const handleViewBookingReceipt = (booking: BookingItem) => {
     setReceiptBooking(booking);
     setStep('booking-receipt');
-  };
-
-  const handleScannedCode = (code: string) => {
-    const bookingId = createdBooking?._id || selectedRide?._id;
-    if (!token || !bookingId) {
-      Alert.alert('Cannot start ride', 'Booking is not ready yet. Please try again.');
-      return;
-    }
-
-    void (async () => {
-      try {
-        setBookingBusy(true);
-        const result = await userApi.startRide(token, bookingId, { unlockCode: code });
-        setCreatedBooking(result.booking);
-        setSelectedRide({
-          ...result.booking,
-          status: 'ongoing',
-          unlockCode: result.booking.unlockCode || code,
-          distance: 0,
-          fare: result.booking.pricing?.totalPayable,
-        });
-        setStep('ride-progress');
-      } catch (error) {
-        Alert.alert('Could not start ride', userApiErrorMessage(error));
-      } finally {
-        setBookingBusy(false);
-      }
-    })();
   };
 
   const handleRideEmergency = () => {
@@ -1532,6 +1565,14 @@ export default function App() {
         setDashboard(profileResult.dashboard || null);
         setRides(ridesResult.rides);
         setTransactions(transactionsResult.transactions || []);
+
+        // The scooty has moved to the drop station; refresh station counts so the
+        // home/search lists reflect the new location right away.
+        const stationsResult = await userApi.stations(
+          token,
+          stationQueryFor(profileResult.user, null),
+        );
+        setStations(stationsResult.stations);
       } catch {
         // refresh failures are non-fatal
       }
@@ -1582,7 +1623,7 @@ export default function App() {
 
   // Render
   if (step === 'splash') {
-    return <SplashScreen onGetStarted={() => setStep('login')} />;
+    return <SplashScreen onGetStarted={handleSplashDone} />;
   }
 
   if (step === 'login') {
@@ -1650,11 +1691,33 @@ export default function App() {
         documents={kycFiles}
         existingDocuments={{
           adharFileUrl: user?.adharFile,
+          adharBackFileUrl: user?.adharBackFile,
+          drivingLicenseFileUrl: user?.drivingLicenseFile,
           panFileUrl: user?.panFile,
           profilePhotoUrl: user?.profilePhotoUrl,
         }}
         loading={kycSubmitting}
       />
+    );
+  }
+
+  if (step === 'activated') {
+    // Figma 477-14493: the approval sheet sits over the pending screen.
+    return (
+      <>
+        <PendingApprovalScreen userName={user?.name || 'User'} status="APPROVED" />
+        <AccountActivatedSheet
+          message="You can now start booking rides around you."
+          onGoToDashboard={() => {
+            if (hasCompletedPermissions(user?.settings)) {
+              setActiveTab('home');
+              setStep('dashboard');
+            } else {
+              setStep('permissions');
+            }
+          }}
+        />
+      </>
     );
   }
 
@@ -1796,6 +1859,7 @@ export default function App() {
         onBack={() => setStep('ride-plan')}
         plan={selectedRidePlan}
         slots={availableTimeSlots}
+        onDateChange={setSlotDateId}
         onContinue={(selection) => {
           setSelectedTimeSlot({
             date: selection.date,
@@ -1830,7 +1894,7 @@ export default function App() {
   if (step === 'bookings') {
     return (
       <BookingsScreen
-        onBack={() => setStep('dashboard')}
+        onBack={() => setStep(bookingsReturnStep)}
         onTabPress={handleTabPress}
         bookings={bookings}
         loading={loading || bookingsLoading}
@@ -1850,7 +1914,12 @@ export default function App() {
             return;
           }
           setSelectedRide(null);
-          setStep('pre-ride');
+          if (status === 'PENDING_PAYMENT') {
+            // Still waiting for station admin approval — show the waiting screen.
+            setStep('booking-confirmed');
+            return;
+          }
+          void requestRideOtpFor(booking);
         }}
         onCancelBooking={handleCancelBookingPress}
         onViewDetails={handleViewBookingDetails}
@@ -1876,7 +1945,7 @@ export default function App() {
     return (
       <PreRideScreen
         onBack={() => setStep('bookings')}
-        onStartRide={() => setStep('scan-qr')}
+        onStartRide={() => void requestRideOtpFor(createdBooking)}
         scootyId={
           createdBooking?.scooter?.registrationNumber ||
           createdBooking?.vehicleId?.registrationNumber ||
@@ -2115,6 +2184,8 @@ export default function App() {
         onBack={() => setStep('confirm-ride')}
         onStartRide={handleStartRide}
         canStartRide={canStartScheduledRide(currentBooking)}
+        rideOtp={currentBooking?.rideOtp}
+        otpLoading={bookingBusy}
         onViewDetails={() => setStep('bookings')}
         onBackHome={() => {
           setActiveTab('home');
@@ -2137,16 +2208,6 @@ export default function App() {
         duration={selectedTimeSlot?.duration || selectedRidePlan?.duration}
         pickupLat={selectedPickupStation?.coordinates?.latitude ?? null}
         pickupLng={selectedPickupStation?.coordinates?.longitude ?? null}
-      />
-    );
-  }
-
-  if (step === 'scan-qr') {
-    return (
-      <ScanQRCodeScreen
-        onBack={() => setStep('pre-ride')}
-        onScanned={handleScannedCode}
-        expectedCode={createdBooking?.unlockCode || selectedRide?.unlockCode || ''}
       />
     );
   }

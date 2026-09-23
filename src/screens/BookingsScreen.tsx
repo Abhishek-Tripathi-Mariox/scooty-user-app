@@ -3,7 +3,6 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
@@ -13,6 +12,7 @@ import { GradientButton } from '../components/GradientButton';
 import { ArrowLeftIcon, CalendarIcon, LocationIcon } from '../components/RideIcons';
 import type { BookingItem } from '../services/userApi';
 import { formatDateTime, formatCurrency } from '../utils/format';
+import { useStyles } from '../utils/responsiveStyles';
 
 type Tab = 'upcoming' | 'active' | 'completed';
 
@@ -43,6 +43,7 @@ export function BookingsScreen({
   onViewReceipt?: (booking: BookingItem) => void;
   onViewDetails?: (booking: BookingItem) => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const [selectedTab, setSelectedTab] = useState<Tab>('upcoming');
 
   const filtered = useMemo(() => {
@@ -130,6 +131,7 @@ function RideCard({
   onViewReceipt?: (booking: BookingItem) => void;
   onViewDetails?: (booking: BookingItem) => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const title = booking.planName || booking.planCode || 'Plan unavailable';
   const idText = `ID: ${booking._id?.substring(0, 10).toUpperCase() || 'Unavailable'}`;
   const pickup = booking.pickupStation?.name || booking.pickupStationId?.name || 'Station unavailable';
@@ -232,7 +234,7 @@ function RideCard({
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -421,4 +423,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 20,
   },
-});
+} as const;

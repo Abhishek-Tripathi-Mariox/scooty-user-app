@@ -4,16 +4,17 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
 import { GradientFill } from '../components/GradientFill';
+import { WheelPicker } from '../components/WheelPicker';
 import { ArrowLeftIcon, CalendarIcon, ClockIcon } from '../components/RideIcons';
 import type { TimeSlotItem } from '../services/userApi';
 import { formatCurrency, formatTime12 } from '../utils/format';
+import { useStyles } from '../utils/responsiveStyles';
 import type { RidePlan } from './RidePlanScreen';
 
 const TIME_SLOTS = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'];
@@ -26,20 +27,30 @@ type DateOption = {
 export function TimeSlotScreen({
   onBack,
   onContinue,
+  onDateChange,
   plan,
   slots,
 }: {
   onBack: () => void;
   onContinue: (selection: { date: string; time: string; duration: string; plan: RidePlan }) => void;
+  onDateChange?: (dateId: string) => void;
   plan?: RidePlan | null;
   slots?: TimeSlotItem[] | null;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const selectedPlan = plan || DEFAULT_PLAN;
   const baseDates = useMemo(() => buildDateOptions(), []);
   const [customDate, setCustomDate] = useState<{ id: string; label: string } | null>(null);
-  const [selectedDate, setSelectedDate] = useState(baseDates[1]?.id || 'tomorrow');
+  const [selectedDate, setSelectedDate] = useState(baseDates[0]?.id || 'today');
   const [selectedTime, setSelectedTime] = useState('10:00');
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  // Let the parent refetch slots for the chosen date (tomorrow / future days
+  // must show the full day, not today's already-passed hours).
+  useEffect(() => {
+    onDateChange?.(selectedDate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
 
   const dates = useMemo(() => {
     if (customDate && !baseDates.some((d) => d.id === customDate.id)) {
@@ -64,7 +75,7 @@ export function TimeSlotScreen({
     }
   }, [availableTimeSlots, selectedTime]);
 
-  const selectedDateLabel = dates.find((d) => d.id === selectedDate)?.label || 'Tomorrow';
+  const selectedDateLabel = dates.find((d) => d.id === selectedDate)?.label || 'Today';
   const selectedTimeLabel =
     availableTimeSlots.find((slot) => slot.value === selectedTime)?.label ||
     formatTime12(selectedTime);
@@ -112,19 +123,8 @@ export function TimeSlotScreen({
 
         <View style={styles.sectionSpacer} />
         <SectionHeader icon={<ClockIcon size={18} color="#fc4c02" />} label="Start Time" />
-        <View style={styles.grid}>
-          {availableTimeSlots.map((slot) => (
-            <Chip
-              key={slot.value}
-              label={slot.label}
-              active={selectedTime === slot.value}
-              onPress={() => !slot.disabled && setSelectedTime(slot.value)}
-              disabled={slot.disabled}
-              height={41}
-              fontSize={12.25}
-            />
-          ))}
-        </View>
+        <WheelPicker items={availableTimeSlots} value={selectedTime} onChange={setSelectedTime} />
+        <Text style={styles.wheelHint}>Scroll to pick your start time</Text>
 
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Booking Summary</Text>
@@ -166,6 +166,7 @@ export function TimeSlotScreen({
 }
 
 function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.sectionHeader}>
       {icon}
@@ -189,6 +190,7 @@ function Chip({
   height?: number;
   fontSize?: number;
 }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <Pressable
       onPress={onPress}
@@ -211,6 +213,7 @@ function Chip({
 }
 
 function SummaryRow({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.summaryRow}>
       <Text style={styles.summaryLabel}>{label}</Text>
@@ -228,6 +231,7 @@ function CalendarPickerModal({
   onClose: () => void;
   onSelect: (iso: string, label: string) => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -363,7 +367,7 @@ const DEFAULT_PLAN: RidePlan = {
   extraCharges: '',
 };
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -441,10 +445,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 7,
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 7,
+  wheelHint: {
+    marginTop: 8,
+    textAlign: 'center',
+    color: '#64748b',
+    fontSize: 11,
+    lineHeight: 15,
   },
   chip: {
     flexBasis: '23%',
@@ -607,4 +613,4 @@ const styles = StyleSheet.create({
     color: '#fc4c02',
     fontWeight: '700',
   },
-});
+} as const;

@@ -16,6 +16,7 @@ import Svg, {
   Stop,
 } from 'react-native-svg';
 import { useResponsiveLayout } from '../utils/responsive';
+import { useBottomInset } from '../utils/insets';
 
 const HomeIcon = require('../assets/images/home.png');
 const NotificationIcon = require('../assets/images/notification.png');
@@ -100,9 +101,24 @@ export function BottomTabs({
     setBarWidth(event.nativeEvent.layout.width);
   };
 
+  const bottomInset = useBottomInset();
+  // Gesture nav reports a slim inset (~16-24dp): extend the bar behind it so
+  // it reaches the screen's bottom edge. 3-button nav reserves a tall ~48dp
+  // system strip — extending the white bar behind that reads as a bloated
+  // navbar, so keep the bar compact and rest it on top of the strip instead
+  // (the app background shows through behind the system buttons).
+  const isButtonNav = bottomInset >= 40;
+  const insetInsideBar = isButtonNav ? 0 : bottomInset;
   return (
     <View
-      style={[styles.bar, { height: Math.max(layout.tabBarHeight, 70) }]}
+      style={[
+        styles.bar,
+        {
+          height: Math.max(layout.tabBarHeight, 70) + insetInsideBar,
+          paddingBottom: 10 + insetInsideBar,
+          marginBottom: isButtonNav ? bottomInset : 0,
+        },
+      ]}
       onLayout={onBarLayout}
     >
       {barWidth > 0 ? (

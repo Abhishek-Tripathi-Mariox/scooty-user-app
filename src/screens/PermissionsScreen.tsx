@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Image, SafeAreaView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Image, SafeAreaView, ScrollView, Switch, Text, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
 import { fetchCoordsIfAllowed, type Coords } from '../utils/location';
+import { useStyles } from '../utils/responsiveStyles';
 
 const LocationIcon = require('../assets/images/location.png');
-const CameraIcon = require('../assets/images/camera.png');
 const PushNotificationIcon = require('../assets/images/pushnotification.png');
 
 type PermissionKey = 'location' | 'camera' | 'notifications';
@@ -27,12 +28,6 @@ const permissions: PermissionItem[] = [
     required: true,
   },
   {
-    key: 'camera',
-    title: 'Camera Access',
-    subtitle: 'Scan QR codes to unlock scooters',
-    icon: CameraIcon,
-  },
-  {
     key: 'notifications',
     title: 'Push Notifications',
     subtitle: 'Get updates about your rides and offers',
@@ -47,9 +42,12 @@ export function PermissionsScreen({
   onContinue: (permissions: Record<PermissionKey, boolean>, coords: Coords | null) => void;
   initialPermissions?: Partial<Record<PermissionKey, boolean>>;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const [enabled, setEnabled] = useState<Record<PermissionKey, boolean>>({
     location: initialPermissions?.location ?? true,
-    camera: initialPermissions?.camera ?? true,
+    // Camera is not offered in the UI any more (rides start via the station
+    // admin's OTP); the key stays for backend compatibility.
+    camera: initialPermissions?.camera ?? false,
     notifications: initialPermissions?.notifications ?? true,
   });
   const [submitting, setSubmitting] = useState(false);
@@ -65,67 +63,77 @@ export function PermissionsScreen({
   return (
     <SafeAreaView style={styles.safe}>
       <AppBackground variant="auth" />
-      <View style={styles.content}>
-        <View style={styles.headerBlock}>
-          <View style={styles.checkCircle}>
-            <View style={styles.checkInner}>
-              <Text style={styles.checkMark}>✓</Text>
+      <ScrollView contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+        <View style={styles.content}>
+          <View style={styles.headerBlock}>
+            <View style={styles.checkCircle}>
+              <View style={styles.checkInner}>
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M5 12.5l4.5 4.5L19 7.5"
+                    stroke="#ffffff"
+                    strokeWidth={3}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </Svg>
+              </View>
             </View>
+            <Text style={styles.title}>Enable Permissions</Text>
+            <Text style={styles.subtitle}>
+              We need a few permissions to provide you the best experience
+            </Text>
           </View>
-          <Text style={styles.title}>Enable Permissions</Text>
-          <Text style={styles.subtitle}>
-            We need a few permissions to provide you the best experience
-          </Text>
-        </View>
 
-        <View style={styles.cardList}>
-          {permissions.map((item) => (
-            <View key={item.key} style={styles.card}>
-              <View style={styles.iconWrap}>
-                <Image source={item.icon} style={styles.iconImage} resizeMode="contain" />
-              </View>
-
-              <View style={styles.textWrap}>
-                <View style={styles.titleRow}>
-                  <Text style={styles.cardTitle}>{item.title}</Text>
-                  {item.required ? <Text style={styles.required}>*Required</Text> : null}
+          <View style={styles.cardList}>
+            {permissions.map((item) => (
+              <View key={item.key} style={styles.card}>
+                <View style={styles.iconWrap}>
+                  <Image source={item.icon} style={styles.iconImage} resizeMode="contain" />
                 </View>
-                <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+
+                <View style={styles.textWrap}>
+                  <View style={styles.titleRow}>
+                    <Text style={styles.cardTitle}>{item.title}</Text>
+                    {item.required ? <Text style={styles.required}>*Required</Text> : null}
+                  </View>
+                  <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
+                </View>
+
+                <Switch
+                  value={enabled[item.key]}
+                  onValueChange={(value) =>
+                    setEnabled((current) => ({ ...current, [item.key]: value }))
+                  }
+                  trackColor={{ false: '#d1d5db', true: '#86c599' }}
+                  thumbColor={enabled[item.key] ? '#16a34a' : '#ffffff'}
+                  ios_backgroundColor="#d1d5db"
+                />
               </View>
+            ))}
+          </View>
 
-              <Switch
-                value={enabled[item.key]}
-                onValueChange={(value) =>
-                  setEnabled((current) => ({ ...current, [item.key]: value }))
-                }
-                trackColor={{ false: '#d1d5db', true: '#86c599' }}
-                thumbColor={enabled[item.key] ? '#16a34a' : '#ffffff'}
-                ios_backgroundColor="#d1d5db"
-              />
-            </View>
-          ))}
+          <View style={styles.footer}>
+            <GradientButton
+              label={submitting ? 'Getting location…' : 'Continue to Home'}
+              onPress={handleContinue}
+              height={52}
+              disabled={submitting}
+            />
+          </View>
         </View>
-
-        <View style={styles.footer}>
-          <GradientButton
-            label={submitting ? 'Getting location…' : 'Continue to Home'}
-            onPress={handleContinue}
-            height={52}
-            disabled={submitting}
-          />
-        </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 24,
     paddingBottom: 16,
@@ -149,12 +157,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#16a34a',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  checkMark: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: '900',
-    lineHeight: 22,
   },
   title: {
     marginTop: 16,
@@ -229,4 +231,4 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 24,
   },
-});
+} as const;

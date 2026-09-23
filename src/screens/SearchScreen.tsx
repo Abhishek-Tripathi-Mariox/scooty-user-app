@@ -21,6 +21,8 @@ import {
   WalkerIcon,
 } from '../components/RideIcons';
 import type { StationItem } from '../services/userApi';
+import { useBottomInset } from '../utils/insets';
+import { useStyles } from '../utils/responsiveStyles';
 
 const StationThumb = require('../assets/images/station-thumb.jpg');
 
@@ -39,6 +41,8 @@ export function SearchScreen({
   onSelectStation?: (station: StationItem) => void;
   onContinue?: () => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
+  const bottomInset = useBottomInset();
   const items = stations ?? [];
   const [minBattery, setMinBattery] = useState(0);
   const [maxDistance, setMaxDistance] = useState(20);
@@ -173,7 +177,7 @@ export function SearchScreen({
         )}
       </ScrollView>
 
-      <View style={styles.footer}>
+      <View style={[styles.footer, { paddingBottom: 24 + bottomInset }]}>
         <GradientButton label="Continue to Book" onPress={() => onContinue?.()} height={52} />
       </View>
     </SafeAreaView>
@@ -197,6 +201,7 @@ function FilterSlider({
   step: number;
   onChange: (next: number) => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const widthRef = useRef(1);
   const pageXRef = useRef(0);
   const trackRef = useRef<View>(null);
@@ -257,6 +262,7 @@ function Stat({
   label: string;
   value: string;
 }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.statBlock}>
       <View style={styles.statRow}>
@@ -268,7 +274,7 @@ function Stat({
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -484,4 +490,4 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.62)',
   },
-});
+} as const;

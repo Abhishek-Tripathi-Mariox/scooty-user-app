@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,6 +20,7 @@ import { GradientButton } from '../components/GradientButton';
 import { ArrowLeftIcon } from '../components/RideIcons';
 import type { KycUploadFile, User } from '../services/userApi';
 import { compressImage } from '../utils/image-compression';
+import { useStyles } from '../utils/responsiveStyles';
 
 const DefaultAvatar = require('../assets/images/profile.png');
 
@@ -100,6 +102,7 @@ function FloatingField({
   chipColor?: string;
   error?: string | null;
 }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.field}>
       <View style={[styles.labelChip, chipColor ? { backgroundColor: chipColor } : null]}>
@@ -133,6 +136,7 @@ export function UpdateProfileScreen({
   onSave: (payload: ProfileFormState, profilePhoto?: KycUploadFile | null) => Promise<void>;
   loading?: boolean;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const [form, setForm] = useState<ProfileFormState>(() => buildForm(user));
   const [selectedPhoto, setSelectedPhoto] = useState<KycUploadFile | null>(null);
   const [photoPreviewUri, setPhotoPreviewUri] = useState<string>(user?.profilePhotoUrl || '');
@@ -192,7 +196,7 @@ export function UpdateProfileScreen({
   };
 
   return (
-    <View style={styles.root}>
+    <SafeAreaView style={styles.root}>
       <AppBackground variant="auth" />
 
       <View style={styles.topbar}>
@@ -311,7 +315,7 @@ export function UpdateProfileScreen({
           />
         </ScrollView>
       </KeyboardAvoidingView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -343,7 +347,7 @@ async function normalizePickedImage(picked: DocumentPickerResponse): Promise<Kyc
   };
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   root: { flex: 1, backgroundColor: 'transparent' },
   flex: { flex: 1 },
   topbar: {
@@ -537,4 +541,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 24,
   },
-});
+} as const;

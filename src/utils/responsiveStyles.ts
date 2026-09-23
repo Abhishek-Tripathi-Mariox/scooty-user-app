@@ -95,5 +95,9 @@ export function createResponsiveStyles<T>(layout: ResponsiveLayout, styles: T): 
 
 export function useStyles<T>(raw: T): T {
   const layout = useResponsiveLayout();
-  return useMemo(() => createResponsiveStyles(layout, raw), [layout, raw]);
+  return useMemo(
+    () => createResponsiveStyles(layout, raw),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [layout.screenWidth, raw],
+  );
 }

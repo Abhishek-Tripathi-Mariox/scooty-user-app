@@ -14,6 +14,7 @@ import { BottomTabs, type TabKey } from '../components/BottomTabs';
 import { GradientButton } from '../components/GradientButton';
 import { ArrowLeftIcon, ShieldIcon, WalletCardIcon } from '../components/RideIcons';
 import type { WalletTransactionItem } from '../services/userApi';
+import { useStyles } from '../utils/responsiveStyles';
 
 type Txn = {
   id: string;
@@ -53,6 +54,7 @@ export function MyWalletScreen({
   onOpenRefundStatus?: () => void;
   onRecharge?: (amount: number) => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const [rechargeOpen, setRechargeOpen] = useState(false);
   const list = useMemo(() => {
     if (!transactions || transactions.length === 0) return [];
@@ -170,6 +172,7 @@ function RechargeModal({
   onClose: () => void;
   onRecharge?: (amount: number) => void;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const [selected, setSelected] = useState(500);
   const preset = RECHARGE_PRESETS.find((p) => p.amount === selected) || RECHARGE_PRESETS[4];
   const gst = Math.round(selected * 0.18);
@@ -302,7 +305,7 @@ function mapTransactionKind(tx: WalletTransactionItem): Txn['kind'] {
   return 'ride';
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -673,4 +676,4 @@ const styles = StyleSheet.create({
   extraTextBold: {
     fontWeight: '600',
   },
-});
+} as const;

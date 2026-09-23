@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -14,6 +15,7 @@ import { BottomTabs, type TabKey } from '../components/BottomTabs';
 import { GradientButton } from '../components/GradientButton';
 import { ArrowLeftIcon } from '../components/RideIcons';
 import type { SupportFaq } from '../services/userApi';
+import { useStyles } from '../utils/responsiveStyles';
 
 export function HelpSupportScreen({
   onBack,
@@ -30,6 +32,7 @@ export function HelpSupportScreen({
   onSubmitIssue?: (message: string) => Promise<void> | void;
   loading?: boolean;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const [issue, setIssue] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
@@ -50,6 +53,10 @@ export function HelpSupportScreen({
     <SafeAreaView style={styles.safe}>
       <AppBackground variant="auth" />
 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
       <View style={styles.header}>
         <Pressable onPress={onBack} style={styles.backButton}>
           <ArrowLeftIcon size={24} color="#1c1c1e" />
@@ -116,6 +123,7 @@ export function HelpSupportScreen({
           </View>
         )}
       </ScrollView>
+      </KeyboardAvoidingView>
 
       <BottomTabs active={activeTab} onTabPress={onTabPress} />
     </SafeAreaView>
@@ -123,6 +131,7 @@ export function HelpSupportScreen({
 }
 
 function ContactTile({ bg, icon, label }: { bg: string; icon: React.ReactNode; label: string }) {
+  const styles = useStyles(RAW_STYLES);
   return (
     <View style={styles.tile}>
       <View style={[styles.tileIcon, { backgroundColor: bg }]}>{icon}</View>
@@ -178,7 +187,7 @@ function ChevronDownIcon({ color, rotated }: { color: string; rotated: boolean }
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   safe: {
     flex: 1,
     backgroundColor: '#ffd1b0',
@@ -201,7 +210,6 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: '#101828',
-    fontFamily: 'Arimo',
     fontSize: 18,
     fontWeight: '700',
     lineHeight: 27,
@@ -253,7 +261,6 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     color: '#101828',
-    fontFamily: 'Arimo',
     fontSize: 18,
     fontWeight: '700',
     lineHeight: 27,
@@ -277,7 +284,6 @@ const styles = StyleSheet.create({
   },
   faqTitle: {
     color: '#101828',
-    fontFamily: 'Arimo',
     fontSize: 18,
     fontWeight: '700',
     lineHeight: 27,
@@ -313,4 +319,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 12,
   },
-});
+} as const;

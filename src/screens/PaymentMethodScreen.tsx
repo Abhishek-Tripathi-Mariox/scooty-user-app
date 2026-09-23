@@ -1,8 +1,9 @@
 import React from 'react';
-import { StyleSheet, Text, View, Pressable, ScrollView } from 'react-native';
+import { Text, View, Pressable, ScrollView } from 'react-native';
 import { PageFrame } from '../components/PageFrame';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { COLORS } from '../constants/theme';
+import { useStyles } from '../utils/responsiveStyles';
 
 type PaymentMethod = 'google-pay' | 'paytm' | 'phonepe' | 'credit-card' | 'upi' | 'mobikwik' | 'cred';
 
@@ -17,6 +18,7 @@ export function PaymentMethodScreen({
   selectedMethod?: PaymentMethod | null;
   amount: number;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const methods: Array<{ id: PaymentMethod; name: string; icon?: string }> = [
     { id: 'google-pay', name: 'Google Pay' },
     { id: 'paytm', name: 'Paytm' },
@@ -78,7 +80,7 @@ export function PaymentMethodScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   root: { flex: 1, backgroundColor: COLORS.background },
   methodsContainer: {
     paddingBottom: 120,
@@ -163,4 +165,4 @@ const styles = StyleSheet.create({
   button: {
     marginBottom: 0,
   },
-});
+} as const;

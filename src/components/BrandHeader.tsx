@@ -1,4 +1,6 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
+import { FONTS } from '../constants/fonts';
+import { useStyles } from '../utils/responsiveStyles';
 
 const ScootyLogo = require('../assets/splash/slydo-logo-upright.png');
 
@@ -7,6 +9,7 @@ export function BrandHeader({
 }: {
   compact?: boolean;
 }) {
+  const styles = useStyles(RAW_STYLES);
   const size = compact ? 72 : 96;
   return (
     <View style={styles.wrap}>
@@ -22,7 +25,7 @@ export function BrandHeader({
   );
 }
 
-const styles = StyleSheet.create({
+const RAW_STYLES = {
   wrap: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -30,12 +33,13 @@ const styles = StyleSheet.create({
   brand: {
     marginTop: 12,
     color: '#151515',
+    fontFamily: FONTS.brand,
     fontSize: 26,
-    fontWeight: '900',
+    fontWeight: 'normal',
     letterSpacing: 0.4,
   },
   compactBrand: {
     marginTop: 8,
     fontSize: 22,
   },
-});
+} as const;
