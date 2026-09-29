@@ -1,26 +1,22 @@
-import { Platform } from 'react-native';
+import { API_TARGET } from '../config/apiTarget';
 
-// USB device: requires `adb reverse tcp:3000 tcp:3000` (router blocks LAN
-// access to the PC). Android emulator alternative: 10.0.2.2. Wi-Fi-only
-// device: LAN IP of the dev machine.
-const LOCAL_USER_API_BASE_URL =
-  Platform.select({
-    android: 'http://192.168.1.37:3000/v1/api',
-    ios: 'http://192.168.1.37:3000/v1/api',
-    default: 'http://192.168.1.37:3000/v1/api',
-  }) || 'http://192.168.1.37:3000/v1/api';
+// Local backend over USB: requires `adb reverse tcp:3000 tcp:3000`, which maps
+// the phone's localhost:3000 to the dev machine. A hardcoded LAN IP breaks as
+// soon as the machine gets a new address, and every request then waits for a
+// timeout before falling back. Android emulator alternative: 10.0.2.2.
+const LOCAL_USER_API_BASE_URL = 'http://localhost:3000/v1/api';
 
 const HOSTED_USER_API_BASE_URL: string = 'https://backend.slydomobility.com/v1/api';
 
-// Dev builds try the local backend first (hosted as fallback); release
-// builds must talk only to the hosted backend — a LAN IP would make every
-// request wait for an unreachable server before falling back.
-export const USER_API_BASE_URL: string = __DEV__
+// 'auto': debug builds use the local backend, release builds the hosted one.
+// See src/config/apiTarget.ts to force one or the other.
+const useLocalBackend = API_TARGET === 'local' || (API_TARGET === 'auto' && __DEV__);
+
+export const USER_API_BASE_URL: string = useLocalBackend
   ? LOCAL_USER_API_BASE_URL
   : HOSTED_USER_API_BASE_URL;
-const USER_API_BASE_URLS = __DEV__
-  ? [LOCAL_USER_API_BASE_URL, HOSTED_USER_API_BASE_URL]
-  : [HOSTED_USER_API_BASE_URL];
+// One backend per build: no silent fallback to a different server.
+const USER_API_BASE_URLS = [USER_API_BASE_URL];
 
 type JsonObject = Record<string, unknown>;
 
@@ -160,6 +156,7 @@ export type RideItem = {
   rideOtpIssuedAt?: string;
   rideStartedAt?: string;
   actualDurationMinutes?: number;
+  refund?: BookingItem['refund'];
   pickupStation?: StationItem;
   dropStation?: StationItem;
   scooter?: {
@@ -212,10 +209,20 @@ export type TimeSlotItem = {
   endLabel?: string;
 };
 
+// Daily booking window ("HH:mm", 24h). earliestTime is the first bookable
+// minute of the requested date, or null when that day is already over.
+export type TimeSlotWindow = {
+  openTime?: string;
+  closeTime?: string;
+  earliestTime?: string | null;
+  minuteStep?: number;
+};
+
 export type TimeSlotResponse = {
   date: string;
   plan: PlanItem;
   slots: TimeSlotItem[];
+  window?: TimeSlotWindow;
 };
 
 export type BookingQuote = {

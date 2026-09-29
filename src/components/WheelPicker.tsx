@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Animated,
   NativeScrollEvent,
@@ -9,6 +9,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import { FONTS } from '../constants/fonts';
 
 export type WheelPickerItem = {
   label: string;
@@ -16,10 +17,111 @@ export type WheelPickerItem = {
   disabled?: boolean;
 };
 
+type WheelAlign = 'left' | 'center' | 'right';
+
 const ITEM_HEIGHT = 44;
 const VISIBLE_ROWS = 5;
+const ACCENT = '#fc4c02';
 
 type ScrollHandle = { scrollTo: (options: { y: number; animated?: boolean }) => void };
+
+/**
+ * One row of the wheel. Everything that changes while scrolling is driven by
+ * the native scroll position, so a row never re-renders during a scroll and
+ * the accent colour follows the finger instead of waiting for the wheel to stop.
+ */
+const WheelRow = memo(function WheelRow({
+  label,
+  disabled,
+  index,
+  itemHeight,
+  scrollY,
+  align,
+  fontSize,
+  accentColor,
+  tight,
+}: {
+  label: string;
+  disabled: boolean;
+  index: number;
+  itemHeight: number;
+  scrollY: Animated.Value;
+  align: WheelAlign;
+  fontSize?: number;
+  accentColor: string;
+  tight: boolean;
+}) {
+  const anim = useMemo(() => {
+    const drum = [-3, -2, -1, 0, 1, 2, 3].map((offset) => (index + offset) * itemHeight);
+    const center = [(index - 0.6) * itemHeight, index * itemHeight, (index + 0.6) * itemHeight];
+    return {
+      opacity: scrollY.interpolate({
+        inputRange: drum,
+        outputRange: [0.14, 0.32, 0.58, 1, 0.58, 0.32, 0.14],
+        extrapolate: 'clamp',
+      }),
+      scale: scrollY.interpolate({
+        inputRange: drum,
+        outputRange: [0.6, 0.76, 0.9, 1.04, 0.9, 0.76, 0.6],
+        extrapolate: 'clamp',
+      }),
+      rotateX: scrollY.interpolate({
+        inputRange: drum,
+        outputRange: ['62deg', '44deg', '24deg', '0deg', '-24deg', '-44deg', '-62deg'],
+        extrapolate: 'clamp',
+      }),
+      selected: scrollY.interpolate({
+        inputRange: center,
+        outputRange: [0, 1, 0],
+        extrapolate: 'clamp',
+      }),
+      resting: scrollY.interpolate({
+        inputRange: center,
+        outputRange: [1, 0, 1],
+        extrapolate: 'clamp',
+      }),
+    };
+  }, [index, itemHeight, scrollY]);
+
+  const sizing = [
+    fontSize != null && { fontSize },
+    // Tight rows: the line box must not be taller than the row.
+    tight && { lineHeight: itemHeight, includeFontPadding: false },
+  ];
+
+  return (
+    <Animated.View
+      style={[
+        styles.row,
+        align === 'left' && styles.rowLeft,
+        align === 'right' && styles.rowRight,
+        { height: itemHeight },
+        {
+          opacity: anim.opacity,
+          transform: [{ perspective: 600 }, { rotateX: anim.rotateX }, { scale: anim.scale }],
+        },
+      ]}
+    >
+      {disabled ? (
+        <Text style={[styles.rowText, sizing, styles.rowTextDisabled]}>{label}</Text>
+      ) : (
+        <View>
+          {/* The bold accent label sets the width; the plain one fades out over it. */}
+          <Animated.Text
+            style={[styles.rowText, styles.rowTextSelected, sizing, { color: accentColor, opacity: anim.selected }]}
+          >
+            {label}
+          </Animated.Text>
+          <Animated.Text
+            style={[styles.rowText, styles.rowTextResting, sizing, { opacity: anim.resting }]}
+          >
+            {label}
+          </Animated.Text>
+        </View>
+      )}
+    </Animated.View>
+  );
+});
 
 /**
  * iOS-style wheel picker built on a snapping Animated.ScrollView.
@@ -31,7 +133,10 @@ export function WheelPicker({
   onChange,
   itemHeight = ITEM_HEIGHT,
   visibleRows = VISIBLE_ROWS,
-  accentColor = '#fc4c02',
+  accentColor = ACCENT,
+  bare = false,
+  fontSize,
+  align = 'center',
   style,
 }: {
   items: WheelPickerItem[];
@@ -40,6 +145,11 @@ export function WheelPicker({
   itemHeight?: number;
   visibleRows?: number;
   accentColor?: string;
+  // Column inside a WheelPickerGroup: no card and no highlight of its own.
+  bare?: boolean;
+  fontSize?: number;
+  // Horizontal position of the labels inside the column.
+  align?: WheelAlign;
   style?: ViewStyle;
 }) {
   const scrollRef = useRef<ScrollHandle | null>(null);
@@ -47,6 +157,12 @@ export function WheelPicker({
   const [layoutReady, setLayoutReady] = useState(false);
   const lastEmitted = useRef<string | null>(null);
   const isUserScrolling = useRef(false);
+
+  // Latest props for the scroll handlers, so the handlers themselves stay stable.
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
   const rows = Math.max(3, visibleRows % 2 === 0 ? visibleRows + 1 : visibleRows);
   const padding = ((rows - 1) / 2) * itemHeight;
@@ -68,59 +184,87 @@ export function WheelPicker({
   useEffect(() => {
     if (!layoutReady || isUserScrolling.current) return;
     if (lastEmitted.current === value) return;
+    // The value was changed from outside: forget the last user pick so a later
+    // change back to that same value still moves the wheel.
+    lastEmitted.current = null;
     scrollToIndex(selectedIndex, true);
   }, [layoutReady, selectedIndex, value, scrollToIndex]);
 
-  const nearestEnabled = useCallback(
-    (index: number) => {
-      if (!items[index]?.disabled) return index;
-      for (let offset = 1; offset < items.length; offset += 1) {
-        const before = items[index - offset];
-        const after = items[index + offset];
-        if (before && !before.disabled) return index - offset;
-        if (after && !after.disabled) return index + offset;
+  const settle = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      isUserScrolling.current = false;
+      const list = itemsRef.current;
+      const raw = Math.round(event.nativeEvent.contentOffset.y / itemHeight);
+      const clamped = Math.min(list.length - 1, Math.max(0, raw));
+
+      let target = clamped;
+      if (list[clamped]?.disabled) {
+        for (let offset = 1; offset < list.length; offset += 1) {
+          const before = list[clamped - offset];
+          const after = list[clamped + offset];
+          if (before && !before.disabled) {
+            target = clamped - offset;
+            break;
+          }
+          if (after && !after.disabled) {
+            target = clamped + offset;
+            break;
+          }
+        }
       }
-      return index;
+      if (target !== clamped) {
+        scrollToIndex(target, true);
+      }
+
+      const next = list[target]?.value;
+      if (next && next !== lastEmitted.current) {
+        lastEmitted.current = next;
+        onChangeRef.current(next);
+      }
     },
-    [items],
+    [itemHeight, scrollToIndex],
   );
 
-  const settle = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    isUserScrolling.current = false;
-    const raw = Math.round(event.nativeEvent.contentOffset.y / itemHeight);
-    const clamped = Math.min(items.length - 1, Math.max(0, raw));
-    const target = nearestEnabled(clamped);
-    if (target !== clamped) {
-      scrollToIndex(target, true);
-    }
-    const next = items[target]?.value;
-    if (next && next !== lastEmitted.current) {
-      lastEmitted.current = next;
-      onChange(next);
-    }
-  };
+  const onScrollBeginDrag = useCallback(() => {
+    isUserScrolling.current = true;
+  }, []);
 
-  const onScrollEndDrag = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    // With no fling, onMomentumScrollEnd never fires, so settle here instead.
-    const vy = Math.abs(event.nativeEvent.velocity?.y ?? 0);
-    if (vy < 0.05) {
-      settle(event);
-    }
-  };
+  const onScrollEndDrag = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      // With no fling, onMomentumScrollEnd never fires, so settle here instead.
+      const vy = Math.abs(event.nativeEvent.velocity?.y ?? 0);
+      if (vy < 0.05) {
+        settle(event);
+      }
+    },
+    [settle],
+  );
+
+  const onScroll = useMemo(
+    () =>
+      Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+        useNativeDriver: true,
+      }),
+    [scrollY],
+  );
+
+  const contentStyle = useMemo(() => ({ paddingVertical: padding }), [padding]);
 
   return (
-    <View style={[styles.wrap, { height }, style]}>
-      <View
-        pointerEvents="none"
-        style={[
-          styles.highlight,
-          {
-            top: padding,
-            height: itemHeight,
-            borderColor: accentColor,
-          },
-        ]}
-      />
+    <View style={[bare ? styles.bareWrap : styles.wrap, { height }, style]}>
+      {bare ? null : (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.highlight,
+            {
+              top: padding,
+              height: itemHeight,
+              borderColor: accentColor,
+            },
+          ]}
+        />
+      )}
       <Animated.ScrollView
         ref={scrollRef as never}
         showsVerticalScrollIndicator={false}
@@ -130,10 +274,8 @@ export function WheelPicker({
         nestedScrollEnabled
         bounces={false}
         overScrollMode="never"
-        contentContainerStyle={{ paddingVertical: padding }}
-        onScrollBeginDrag={() => {
-          isUserScrolling.current = true;
-        }}
+        contentContainerStyle={contentStyle}
+        onScrollBeginDrag={onScrollBeginDrag}
         onScrollEndDrag={onScrollEndDrag}
         onMomentumScrollEnd={settle}
         onLayout={() => {
@@ -143,101 +285,134 @@ export function WheelPicker({
           }
         }}
         scrollEventThrottle={16}
-        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-          useNativeDriver: true,
-        })}
+        onScroll={onScroll}
       >
-        {items.map((item, index) => {
-          const inputRange = [
-            (index - 2) * itemHeight,
-            (index - 1) * itemHeight,
-            index * itemHeight,
-            (index + 1) * itemHeight,
-            (index + 2) * itemHeight,
-          ];
-          const opacity = scrollY.interpolate({
-            inputRange,
-            outputRange: [0.25, 0.5, 1, 0.5, 0.25],
-            extrapolate: 'clamp',
-          });
-          const scale = scrollY.interpolate({
-            inputRange,
-            outputRange: [0.8, 0.9, 1.08, 0.9, 0.8],
-            extrapolate: 'clamp',
-          });
-          const rotateX = scrollY.interpolate({
-            inputRange,
-            outputRange: ['50deg', '30deg', '0deg', '-30deg', '-50deg'],
-            extrapolate: 'clamp',
-          });
-          const isSelected = index === selectedIndex;
-          return (
-            <Animated.View
-              key={item.value}
-              style={[
-                styles.row,
-                { height: itemHeight },
-                { opacity, transform: [{ perspective: 600 }, { rotateX }, { scale }] },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.rowText,
-                  isSelected && { color: accentColor, fontWeight: '700' },
-                  item.disabled && styles.rowTextDisabled,
-                ]}
-              >
-                {item.label}
-              </Text>
-            </Animated.View>
-          );
-        })}
+        {items.map((item, index) => (
+          <WheelRow
+            key={item.value}
+            label={item.label}
+            disabled={Boolean(item.disabled)}
+            index={index}
+            itemHeight={itemHeight}
+            scrollY={scrollY}
+            align={align}
+            fontSize={fontSize}
+            accentColor={accentColor}
+            tight={bare}
+          />
+        ))}
       </Animated.ScrollView>
-      <View pointerEvents="none" style={[styles.fade, styles.fadeTop, { height: padding }]} />
-      <View pointerEvents="none" style={[styles.fade, styles.fadeBottom, { height: padding }]} />
+    </View>
+  );
+}
+
+/**
+ * One card holding several bare wheels side by side under one shared
+ * highlight row.
+ */
+export function WheelPickerGroup({
+  children,
+  itemHeight = ITEM_HEIGHT,
+  visibleRows = VISIBLE_ROWS,
+  accentColor = ACCENT,
+  onInteractionChange,
+  style,
+}: {
+  children: ReactNode;
+  itemHeight?: number;
+  visibleRows?: number;
+  accentColor?: string;
+  // True while a finger is on the wheels, so the page can stop scrolling under them.
+  onInteractionChange?: (active: boolean) => void;
+  style?: ViewStyle;
+}) {
+  const rows = Math.max(3, visibleRows % 2 === 0 ? visibleRows + 1 : visibleRows);
+  const padding = ((rows - 1) / 2) * itemHeight;
+
+  return (
+    <View
+      style={[styles.wrap, { height: rows * itemHeight }, style]}
+      onTouchStart={() => onInteractionChange?.(true)}
+      onTouchEnd={() => onInteractionChange?.(false)}
+      onTouchCancel={() => onInteractionChange?.(false)}
+    >
+      <View
+        pointerEvents="none"
+        style={[
+          styles.highlight,
+          styles.groupHighlight,
+          // Slightly taller than a row so the centred text has room.
+          { top: padding - 4, height: itemHeight + 8, borderColor: accentColor },
+        ]}
+      />
+      <View style={styles.groupRow}>{children}</View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    borderRadius: 14,
+  bareWrap: {
+    flex: 1,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255, 255, 255, 0.45)',
+  },
+  // Hugs the columns instead of spanning the whole card.
+  groupHighlight: {
+    left: 60,
+    right: 60,
+    borderRadius: 12,
+  },
+  groupRow: {
+    flex: 1,
+    flexDirection: 'row',
+    // Keeps the columns close together in the middle of the card.
+    paddingHorizontal: 84,
+    gap: 14,
+  },
+  // Same frosted-glass card as the other screens (translucent white + light border)
+  wrap: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.62)',
   },
   highlight: {
     position: 'absolute',
-    left: 12,
-    right: 12,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    backgroundColor: 'rgba(252, 76, 2, 0.08)',
+    left: 16,
+    right: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.38)',
   },
   row: {
     alignItems: 'center',
     justifyContent: 'center',
   },
+  rowLeft: {
+    alignItems: 'flex-start',
+  },
+  rowRight: {
+    alignItems: 'flex-end',
+  },
   rowText: {
-    color: '#0f172a',
+    color: '#1e293b',
+    fontFamily: FONTS.medium,
     fontSize: 17,
     fontWeight: '500',
+  },
+  rowTextSelected: {
+    fontFamily: FONTS.semiBold,
+    fontWeight: '600',
+  },
+  // Sits exactly over the accent label.
+  rowTextResting: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
   },
   rowTextDisabled: {
     color: '#94a3b8',
     textDecorationLine: 'line-through',
-  },
-  fade: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.28)',
-  },
-  fadeTop: {
-    top: 0,
-  },
-  fadeBottom: {
-    bottom: 0,
   },
 });

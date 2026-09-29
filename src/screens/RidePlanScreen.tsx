@@ -17,18 +17,25 @@ import {
 } from '../components/RideIcons';
 import { useStyles } from '../utils/responsiveStyles';
 
-export type RidePlanId = 'hourly' | 'full-day' | 'weekly' | 'monthly';
+// Unique per backend plan (its _id, else its code), so two plans of the same
+// type never collide.
+export type RidePlanId = string;
+
+// Plan category from the backend plan `type`; undefined when it is unknown.
+export type RidePlanKind = 'hourly' | 'full-day' | 'weekly' | 'monthly';
 
 export type RidePlan = {
   id: RidePlanId;
+  kind?: RidePlanKind;
   code?: string;
   title: string;
   duration: string;
-  price: number;
+  price: number | null;
   rateLabel: string;
   bullets: string[];
   validity: string;
   extraCharges: string;
+  badge?: string;
 };
 
 export function RidePlanScreen({
@@ -79,7 +86,7 @@ export function RidePlanScreen({
             {availablePlans.map((plan) => {
             const active = activePlanId === plan.id;
             const bullets = plan.bullets.length > 0 ? plan.bullets.slice(0, 3) : [];
-            const showBadge = plan.id === 'full-day';
+            const badge = (plan.badge || '').trim();
             return (
               <Pressable
                 key={plan.id}
@@ -89,7 +96,7 @@ export function RidePlanScreen({
                 <View style={styles.cardHeader}>
                   <View style={styles.cardHeaderLeft}>
                     <View style={styles.iconBox}>
-                      {plan.id === 'hourly' ? (
+                      {plan.kind === 'hourly' ? (
                         <ClockIcon size={32} color="#fc4c02" />
                       ) : (
                         <CalendarIcon size={32} color="#fc4c02" />
@@ -97,11 +104,13 @@ export function RidePlanScreen({
                     </View>
                     <View>
                       <Text style={styles.planTitle}>{plan.title}</Text>
-                      <Text style={styles.planDuration}>{plan.duration}</Text>
+                      <Text style={styles.planDuration}>{plan.duration || '—'}</Text>
                     </View>
                   </View>
                   <View style={styles.priceWrap}>
-                    <Text style={styles.price}>{`₹${plan.price}`}</Text>
+                    <Text style={styles.price}>
+                      {plan.price != null ? `₹${plan.price}` : '—'}
+                    </Text>
                     <Text style={styles.rateLabel}>{plan.rateLabel}</Text>
                   </View>
                 </View>
@@ -115,12 +124,14 @@ export function RidePlanScreen({
                   ))}
                 </View>
 
-                <InfoBox title="Validity" value={plan.validity || 'Valid for the selected booking window'} />
-                <InfoBox title="Extra Charges" value={plan.extraCharges || 'No additional charges shown'} />
+                {plan.validity ? <InfoBox title="Validity" value={plan.validity} /> : null}
+                {plan.extraCharges ? (
+                  <InfoBox title="Extra Charges" value={plan.extraCharges} />
+                ) : null}
 
-                {showBadge ? (
+                {badge ? (
                   <View style={styles.badge}>
-                    <Text style={styles.badgeText}>MOST POPULAR</Text>
+                    <Text style={styles.badgeText}>{badge}</Text>
                   </View>
                 ) : null}
               </Pressable>
@@ -137,6 +148,7 @@ export function RidePlanScreen({
             if (!activePlan) return;
             onContinue(activePlan);
           }}
+          disabled={!activePlan}
           height={56}
         />
       </View>

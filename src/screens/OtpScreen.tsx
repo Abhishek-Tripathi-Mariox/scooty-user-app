@@ -13,7 +13,7 @@ import { BrandHeader } from '../components/BrandHeader';
 import { GradientButton } from '../components/GradientButton';
 import { LockIcon } from '../components/LockIcon';
 import { PhoneIcon } from '../components/PhoneIcon';
-import { DEFAULT_PHONE_NUMBER, OTP_LENGTH, RESEND_SECONDS } from '../constants/auth';
+import { OTP_LENGTH, RESEND_SECONDS } from '../constants/auth';
 import { useStyles } from '../utils/responsiveStyles';
 
 export function OtpScreen({
@@ -57,7 +57,7 @@ export function OtpScreen({
     onOtpChange(value.replace(/\D/g, '').slice(0, OTP_LENGTH));
   };
 
-  const displayNumber = phoneNumber || DEFAULT_PHONE_NUMBER;
+  const displayNumber = phoneNumber || '';
   const canSubmit = !loading && otp.length === OTP_LENGTH;
 
   return (
@@ -79,7 +79,7 @@ export function OtpScreen({
                 <View style={styles.inputIcon}>
                   <PhoneIcon width={20} height={20} />
                 </View>
-                <Text style={styles.valueText}>{displayNumber}</Text>
+                <Text style={styles.valueText}>{displayNumber || '—'}</Text>
               </Pressable>
             </View>
 
@@ -103,7 +103,7 @@ export function OtpScreen({
               </Pressable>
               <Text style={styles.helper}>
                 {secondsLeft > 0 ? (
-                  <>OTP sent to {displayNumber}</>
+                  <>{displayNumber ? `OTP sent to ${displayNumber}` : 'OTP sent'}</>
                 ) : (
                   <Text onPress={onResend} style={styles.resendLink}>
                     Resend OTP

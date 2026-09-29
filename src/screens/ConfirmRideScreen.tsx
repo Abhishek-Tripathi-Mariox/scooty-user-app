@@ -26,29 +26,30 @@ import {
 
 const StationThumb = require('../assets/images/station-thumb.jpg');
 
+const isAmount = (value?: number | null): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const money = (value?: number | null) => (isAmount(value) ? `₹${value}` : '—');
+
 export function ConfirmRideScreen({
   onBack,
   onConfirm,
   loading,
   pickupStationName,
   scheduleLabel,
-  estimatedTotal,
+  endLabel,
+  walletBalance,
   pricing,
 }: {
   onBack: () => void;
   onConfirm: () => void;
-  scootyId?: string;
-  scootyBattery?: number;
-  scootyRange?: number;
-  farePerMinute?: number;
-  farePerKilometer?: number;
-  destinations?: Array<{ icon: string; label: string }>;
   loading?: boolean;
   planName?: string;
   pickupStationName?: string;
   dropStationName?: string;
   scheduleLabel?: string;
-  estimatedTotal?: number;
+  endLabel?: string;
+  walletBalance?: number | null;
   pricing?: {
     baseFare?: number;
     securityDeposit?: number;
@@ -56,18 +57,23 @@ export function ConfirmRideScreen({
     tax?: number;
     discount?: number;
     totalPayable?: number;
-  };
+  } | null;
 }) {
-  // Real amounts come from the backend quote; nothing is computed locally.
-  const rideFare = pricing?.baseFare ?? estimatedTotal ?? 0;
-  const convenienceFee = pricing?.convenienceFee ?? 0;
-  const taxes = pricing?.tax ?? 0;
-  const discount = pricing?.discount ?? 0;
-  const deposit = pricing?.securityDeposit ?? 0;
-  const subtotal = rideFare + convenienceFee + taxes;
-  const totalPayable = pricing?.totalPayable ?? Math.max(0, subtotal + deposit - discount);
-  const walletAvailable = 0;
+  // Every amount comes from the backend quote. Without a quote the screen
+  // shows dashes and the booking cannot be confirmed.
+  const rideFare = pricing?.baseFare;
+  const convenienceFee = pricing?.convenienceFee;
+  const taxes = pricing?.tax;
+  const discount = pricing?.discount;
+  const deposit = pricing?.securityDeposit;
+  const subtotal =
+    isAmount(rideFare) && isAmount(convenienceFee) && isAmount(taxes)
+      ? rideFare + convenienceFee + taxes
+      : null;
+  const totalPayable = pricing?.totalPayable;
+  const hasTotal = isAmount(totalPayable);
   const scheduleText = scheduleLabel || 'Schedule unavailable';
+  const endText = endLabel || '—';
   const styles = useStyles(RAW_STYLES);
   const stationLabel = pickupStationName || 'Station unavailable';
   const [insuranceOpen, setInsuranceOpen] = useState(false);
@@ -101,7 +107,7 @@ export function ConfirmRideScreen({
             <ClockIcon size={20} color="#6a7282" />
             <View style={styles.planRowText}>
               <Text style={styles.planLabel}>End Date & Time</Text>
-              <Text style={styles.planValue}>{scheduleText}</Text>
+              <Text style={styles.planValue}>{endText}</Text>
             </View>
           </View>
         </Card>
@@ -122,12 +128,14 @@ export function ConfirmRideScreen({
 
         <Card>
           <CardTitle icon={<ReceiptIcon size={22} color="#16a34a" />} text="Cost Breakdown" bold />
-          <CostRow label="Ride Fare" value={`₹${rideFare}`} />
-          <CostRow label="Convenience Fee" value={`₹${convenienceFee}`} />
-          <CostRow label="Taxes (GST)" value={`₹${taxes}`} />
-          {discount > 0 ? <CostRow label="Discount" value={`-₹${discount}`} /> : null}
+          <CostRow label="Ride Fare" value={money(rideFare)} />
+          <CostRow label="Convenience Fee" value={money(convenienceFee)} />
+          <CostRow label="Taxes (GST)" value={money(taxes)} />
+          {isAmount(discount) && discount > 0 ? (
+            <CostRow label="Discount" value={`-₹${discount}`} />
+          ) : null}
           <View style={styles.costDivider} />
-          <CostRow label="Subtotal" value={`₹${subtotal}`} boldLabel boldValue />
+          <CostRow label="Subtotal" value={money(subtotal)} boldLabel boldValue />
           <View style={styles.costDivider} />
           <View style={styles.depositRow}>
             <ShieldIcon size={20} color="#16a34a" />
@@ -135,12 +143,12 @@ export function ConfirmRideScreen({
             <View style={styles.infoButton}>
               <SmallInfoIcon size={16} color="#6a7282" />
             </View>
-            <Text style={styles.depositValue}>₹{deposit}</Text>
+            <Text style={styles.depositValue}>{money(deposit)}</Text>
           </View>
           <View style={styles.costDivider} />
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total Payable</Text>
-            <Text style={styles.totalValue}>₹{totalPayable}</Text>
+            <Text style={styles.totalValue}>{money(totalPayable)}</Text>
           </View>
         </Card>
 
@@ -161,7 +169,9 @@ export function ConfirmRideScreen({
           <ShieldIcon size={22} color="#166534" />
           <View style={styles.alertBody}>
             <Text style={styles.alertTitle}>
-              ₹{deposit} security deposit is fully refundable after ride completion.
+              {isAmount(deposit)
+                ? `₹${deposit} security deposit is fully refundable after ride completion.`
+                : 'Security deposit is fully refundable after ride completion.'}
             </Text>
             <Text style={styles.alertText}>Tap to learn more about deposit refund process</Text>
           </View>
@@ -176,7 +186,7 @@ export function ConfirmRideScreen({
             </View>
             <View style={styles.paymentRight}>
               <Text style={styles.paymentAvailable}>Available</Text>
-              <Text style={styles.paymentAmount}>₹{walletAvailable}</Text>
+              <Text style={styles.paymentAmount}>{money(walletBalance)}</Text>
             </View>
           </View>
         </Card>
@@ -195,9 +205,14 @@ export function ConfirmRideScreen({
 
       <View style={styles.footer}>
         <GradientButton
-          label={loading ? 'Confirming...' : `Confirm & Pay ₹${totalPayable}`}
-          onPress={onConfirm}
-          disabled={loading}
+          label={
+            loading ? 'Confirming...' : hasTotal ? `Confirm & Pay ₹${totalPayable}` : 'Confirm & Pay'
+          }
+          onPress={() => {
+            if (!hasTotal) return;
+            onConfirm();
+          }}
+          disabled={loading || !hasTotal}
           height={56}
         />
       </View>

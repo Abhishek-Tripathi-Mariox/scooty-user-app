@@ -137,7 +137,8 @@ function RideCard({
   const pickup = booking.pickupStation?.name || booking.pickupStationId?.name || 'Station unavailable';
   const timeLabel =
     booking.schedule?.startLabel || formatDateTime(booking.startAt || booking.startTime) || '—';
-  const total = formatCurrency(booking.pricing?.totalPayable ?? booking.fare) || '₹0.00';
+  const totalValue = booking.pricing?.totalPayable ?? booking.fare;
+  const total = totalValue != null ? formatCurrency(totalValue) : '—';
   const status = (booking.status || '').toLowerCase();
   const isPendingApproval = status === 'pending_payment';
   const isConfirmed = status === 'confirmed';

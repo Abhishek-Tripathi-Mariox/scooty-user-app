@@ -13,7 +13,8 @@ import { ArrowLeftIcon } from '../components/RideIcons';
 import { formatCurrency } from '../utils/format';
 import { useStyles } from '../utils/responsiveStyles';
 
-export type PaymentMethodId = 'CASH' | 'WALLET' | 'UPI' | 'NETBANKING';
+// The backend only supports these two payment methods.
+export type PaymentMethodId = 'CASH' | 'WALLET';
 
 type PayOption = {
   id: PaymentMethodId;
@@ -41,39 +42,27 @@ const OPTIONS: PayOption[] = [
     iconColor: '#fc4c02',
     iconChar: 'W',
   },
-  {
-    id: 'UPI',
-    label: 'UPI',
-    description: 'Google Pay, PhonePe, Paytm & other UPI apps',
-    iconBg: '#e0f2fe',
-    iconColor: '#0284c7',
-    iconChar: 'U',
-  },
-  {
-    id: 'NETBANKING',
-    label: 'Online Banking',
-    description: 'Net banking from all major banks',
-    iconBg: '#ede9fe',
-    iconColor: '#6d28d9',
-    iconChar: 'B',
-  },
 ];
 
 export function PaymentModeScreen({
   onBack,
   onConfirm,
-  amount = 0,
-  walletBalance = 0,
+  amount,
+  walletBalance,
   loading = false,
 }: {
   onBack: () => void;
   onConfirm: (methodId: PaymentMethodId) => void;
-  amount?: number;
-  walletBalance?: number;
+  amount?: number | null;
+  walletBalance?: number | null;
   loading?: boolean;
 }) {
   const styles = useStyles(RAW_STYLES);
-  const walletEnough = walletBalance >= amount;
+  // Amount comes from the backend quote only; without it nothing can be paid.
+  const amountKnown = typeof amount === 'number' && Number.isFinite(amount);
+  const walletKnown = typeof walletBalance === 'number' && Number.isFinite(walletBalance);
+  const amountText = amountKnown ? formatCurrency(amount) : '—';
+  const walletEnough = amountKnown && walletKnown && walletBalance >= amount;
   const [selected, setSelected] = useState<PaymentMethodId>('CASH');
 
   return (
@@ -94,7 +83,7 @@ export function PaymentModeScreen({
       >
         <View style={styles.amountCard}>
           <Text style={styles.amountLabel}>Amount Payable</Text>
-          <Text style={styles.amountValue}>{formatCurrency(amount)}</Text>
+          <Text style={styles.amountValue}>{amountText}</Text>
         </View>
 
         <Text style={styles.sectionLabel}>Choose how you'd like to pay</Text>
@@ -118,8 +107,8 @@ export function PaymentModeScreen({
                     <Text style={styles.rowLabel}>{opt.label}</Text>
                     <Text style={styles.rowNote}>
                       {opt.id === 'WALLET'
-                        ? `Balance: ${formatCurrency(walletBalance)}${
-                            !walletEnough ? ' — Insufficient' : ''
+                        ? `Balance: ${walletKnown ? formatCurrency(walletBalance) : '—'}${
+                            amountKnown && walletKnown && !walletEnough ? ' — Insufficient' : ''
                           }`
                         : opt.description}
                     </Text>
@@ -134,15 +123,18 @@ export function PaymentModeScreen({
         </View>
 
         <Text style={styles.helperText}>
-          You can top up your wallet from Profile {'>'} My Wallet to use the wallet option.
+          Wallet can be used only when its balance covers the full amount.
         </Text>
       </ScrollView>
 
       <View style={styles.footer}>
         <GradientButton
-          label={loading ? 'Processing…' : `Confirm — ${formatCurrency(amount)}`}
-          onPress={() => onConfirm(selected)}
-          disabled={loading || (selected === 'WALLET' && !walletEnough)}
+          label={loading ? 'Processing…' : `Confirm — ${amountText}`}
+          onPress={() => {
+            if (!amountKnown) return;
+            onConfirm(selected);
+          }}
+          disabled={loading || !amountKnown || (selected === 'WALLET' && !walletEnough)}
           height={56}
         />
       </View>

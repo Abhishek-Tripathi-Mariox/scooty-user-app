@@ -27,11 +27,15 @@ import ScootyIcon from '../assets/splash/scooty-icon.svg';
 
 const HeroArt = require('../assets/splash/hero-art.png');
 const SlydoLogo = require('../assets/splash/slydo-logo-upright.png');
+// "Slydo" wordmark in the brand typeface (Insignia), orange gradient — artwork
+// from the client's logo lockup, so it renders identically on every device.
+const SlydoWordmark = require('../assets/splash/slydo-wordmark.png');
 
 // Splash flow (based on the Figma frames 8851-1157 … 8851-1181, adjusted per
 // client feedback): logo slides in → rotates into a big diamond and rests →
-// rotates back while shrinking small → logo grows back out of it with the name
-// sliding out beside it → logo zooms into the orange onboarding screen.
+// rotates back while shrinking small → logo grows back out of it and the
+// "Slydo" wordmark slides out from the logo's side → logo zooms into the
+// orange onboarding screen.
 // The logo is the transparent brand mark, not the rounded-square icon.
 const T_BLANK_MS = 450;
 const T_LOGO_IN_MS = 280;
@@ -40,13 +44,18 @@ const T_DIAMOND_MS = 600; // eased rotation into the diamond …
 const T_DIAMOND_HOLD_MS = 550; // … then it rests
 const T_SHRINK_MS = 380; // rotates back while shrinking to a tiny mark
 const T_SMALL_HOLD_MS = 140;
-const T_LOCKUP_IN_MS = 480; // logo grows back out of the tiny mark, name slides out beside it
+const T_LOCKUP_IN_MS = 480; // logo grows back out of the tiny mark
+const T_NAME_DELAY_MS = 200; // wordmark waits until the logo is mostly grown …
+const T_NAME_IN_MS = 560; // … then slides out from the logo's side
 const T_LOCKUP_HOLD_MS = 850;
 const T_ZOOM_OUT_MS = 700; // slow bloom into the orange screen
 // How big the logo gets while it rotates into the diamond (relative to 100px).
 const DIAMOND_SCALE = 1.7;
 // How small the mark gets between the diamond and the lockup (relative to 100px).
 const SMALL_SCALE = 0.025;
+// Wordmark artwork is 1049×341; in the brand lockup it is 1.74× the logo wide.
+const WORDMARK_ASPECT = 1049 / 341;
+const WORDMARK_TO_LOGO = 1.74;
 const T_HERO_IN_MS = 480;
 // Base size of the orange square that blooms out of the logo (it is scaled up).
 const BLOOM_BASE = 200;
@@ -61,7 +70,6 @@ export const SplashScreen = memo(function SplashScreen({
   const { width, height } = useWindowDimensions();
   const bottomInset = useBottomInset();
 
-  const [textWidth, setTextWidth] = useState(0);
   const styles = useMemo(() => makeStyles(width, height), [width, height]);
 
   const logoRef = useRef<Image>(null);
@@ -77,7 +85,7 @@ export const SplashScreen = memo(function SplashScreen({
   const logoMorphY = useRef(new Animated.Value(0)).current;
   // 1 = the logo alone sits at the screen centre, 0 = logo + name centred together
   const lockupShift = useRef(new Animated.Value(1)).current;
-  // Name reveal (0 = tucked behind the logo, 1 = wiped out to the right)
+  // Wordmark reveal (0 = tucked behind the logo, 1 = slid out to its right)
   const reveal = useRef(new Animated.Value(0)).current;
   // Onboarding: the orange backdrop blooms out of the logo, then the content dissolves in
   const bloomX = useRef(new Animated.Value(0)).current;
@@ -203,8 +211,8 @@ export const SplashScreen = memo(function SplashScreen({
       ]),
       Animated.delay(T_SMALL_HOLD_MS),
 
-      // Splash5 — the icon and the name both come out of that point: the logo
-      // grows in place while "Slydo / Mobility" scales out beside it, then holds
+      // Splash5 — the logo grows back out of that point, and the "Slydo"
+      // wordmark slides out from behind the logo's right side, then holds
       Animated.parallel([
         Animated.timing(logoScale, {
           toValue: 1,
@@ -214,7 +222,8 @@ export const SplashScreen = memo(function SplashScreen({
         }),
         Animated.timing(reveal, {
           toValue: 1,
-          duration: T_LOCKUP_IN_MS + 80,
+          delay: T_NAME_DELAY_MS,
+          duration: T_NAME_IN_MS,
           easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
         }),
@@ -247,22 +256,23 @@ export const SplashScreen = memo(function SplashScreen({
 
   // While the logo is alone it sits at the screen centre; once the lockup
   // forms, the whole logo + name group is centred together.
-  const gap = styles.lockup.gap as number;
-  const shift = (gap + textWidth) / 2;
+  const wordmarkWidth = styles.wordmark.width as number;
+  const clipInset = styles.textClip.paddingLeft as number;
+  const clipOverlap = -(styles.textClip.marginLeft as number);
+  const shift = (clipInset - clipOverlap + wordmarkWidth) / 2;
   const lockupTranslateX = lockupShift.interpolate({
     inputRange: [0, 1],
     outputRange: [0, shift],
   });
-  // Name is tucked fully behind the logo, then wipes out to the right —
-  // so "Slydo Mobility" appears to emerge from the logo itself.
+  // Wordmark starts fully tucked behind the logo's right edge, then slides
+  // out to the right — so "Slydo" appears to come out of the logo's side.
   const textTranslateX = reveal.interpolate({
     inputRange: [0, 1],
-    outputRange: [-(textWidth + 24), 0],
+    outputRange: [-(wordmarkWidth + clipInset), 0],
   });
-  // Name scales out of the point together with the logo, then settles at full size.
-  const textScale = reveal.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.35, 1],
+  const textOpacity = reveal.interpolate({
+    inputRange: [0, 0.3, 1],
+    outputRange: [0, 1, 1],
   });
   const logoRotateDeg = logoRotate.interpolate({
     inputRange: [0, 1],
@@ -326,23 +336,18 @@ export const SplashScreen = memo(function SplashScreen({
             resizeMode="contain"
           />
           <View style={styles.textClip}>
-            <Animated.View
-              onLayout={(e) => setTextWidth(e.nativeEvent.layout.width)}
+            <Animated.Image
+              source={SlydoWordmark}
+              accessibilityLabel="Slydo"
               style={[
-                styles.textWrap,
+                styles.wordmark,
                 {
-                  opacity: Animated.multiply(reveal, nameOpacity),
-                  transform: [{ translateX: textTranslateX }, { scale: textScale }],
+                  opacity: Animated.multiply(textOpacity, nameOpacity),
+                  transform: [{ translateX: textTranslateX }],
                 },
               ]}
-            >
-              <Text style={styles.title} numberOfLines={1}>
-                Slydo
-              </Text>
-              <Text style={styles.subtitle} numberOfLines={1}>
-                Mobility
-              </Text>
-            </Animated.View>
+              resizeMode="contain"
+            />
           </View>
         </Animated.View>
       </View>
@@ -561,8 +566,7 @@ function SplashBackground({ width, height }: { width: number; height: number }) 
 function makeStyles(width: number, height: number) {
   const isShort = height < 700;
   const logoSize = Math.min(width * 0.235, 100);
-  const titleSize = Math.min(width * 0.13, 56);
-  const subtitleSize = Math.min(width * 0.04, 17);
+  const wordmarkWidth = Math.round(logoSize * WORDMARK_TO_LOGO);
   const heroSize = Math.min(width * 0.96, height * 0.42);
   const ctaHeight = Math.min(width * 0.17, 70);
   const ctaPad = 4;
@@ -584,7 +588,6 @@ function makeStyles(width: number, height: number) {
     lockup: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 14,
       paddingHorizontal: 20,
     },
     logo: {
@@ -592,33 +595,19 @@ function makeStyles(width: number, height: number) {
       height: logoSize,
       zIndex: 2,
     },
-    // Sits just behind the logo's right edge and clips the name so it appears
-    // to slide out from inside the logo.
+    // Starts at the right edge of the mark (the logo PNG has ~8% transparent
+    // padding there) and clips the wordmark so it slides out from the logo's side.
     textClip: {
-      marginLeft: -8,
-      paddingLeft: 8,
+      marginLeft: -Math.round(logoSize * 0.08),
+      paddingLeft: Math.round(logoSize * 0.145),
       overflow: 'hidden',
       zIndex: 1,
     },
-    textWrap: {
-      justifyContent: 'center',
-    },
-    title: {
-      color: '#1f2533',
-      fontFamily: FONTS.brand,
-      fontSize: titleSize,
-      fontWeight: 'normal',
-      letterSpacing: 0.2,
-      lineHeight: titleSize * 1.08,
-    },
-    subtitle: {
-      marginTop: 2,
-      marginLeft: 2,
-      color: 'rgba(31,37,51,0.62)',
-      fontFamily: FONTS.brand,
-      fontSize: subtitleSize,
-      fontWeight: 'normal',
-      letterSpacing: 1.6,
+    // Sits slightly below the logo's centre line, as in the brand lockup.
+    wordmark: {
+      width: wordmarkWidth,
+      height: Math.round(wordmarkWidth / WORDMARK_ASPECT),
+      marginTop: Math.round(logoSize * 0.05),
     },
     bloom: {
       position: 'absolute',
