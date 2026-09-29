@@ -5,30 +5,78 @@ import { GradientButton } from '../components/GradientButton';
 import { CheckIcon, ClockIcon, ShieldIcon } from '../components/RideIcons';
 import { useStyles } from '../utils/responsiveStyles';
 
+type RidePricing = {
+  baseFare?: number;
+  convenienceFee?: number;
+  tax?: number;
+  discount?: number;
+  securityDeposit?: number;
+  totalPayable?: number;
+};
+
+const isAmount = (value?: number | null): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const humanize = (value?: string) => {
+  const normalized = String(value || '').trim().replace(/_/g, ' ').toLowerCase();
+  if (!normalized) return '';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
 export function RideCompletedScreen({
   onHome,
   onRate,
+  status,
   duration,
   distance,
-  fare,
-  securityDeposit,
+  pricing,
+  payment,
+  refund,
 }: {
   onBack: () => void;
   onHome: () => void;
   onRate: () => void;
+  status?: string;
   duration?: string;
-  distance?: number;
-  fare?: number;
-  securityDeposit?: number;
+  distance?: number | null;
+  pricing?: RidePricing | null;
+  payment?: { status?: string; method?: string; paidAmount?: number } | null;
+  refund?: { status?: string; amount?: number } | null;
 }) {
   const styles = useStyles(RAW_STYLES);
+  const isCancelled = String(status || '').trim().toUpperCase() === 'CANCELLED';
   const durationText = duration || '—';
-  const distanceText = distance != null ? `${distance.toFixed(1)} km` : '—';
-  const baseFare = fare ?? 0;
-  const distanceFare = 0;
-  const timeFare = 0;
-  const total = fare ?? baseFare;
-  const deposit = securityDeposit ?? 1000;
+  const distanceText = isAmount(distance) && distance > 0 ? `${distance.toFixed(1)} km` : '—';
+
+  const fareRows: Array<{ label: string; value: string }> = [];
+  if (isAmount(pricing?.baseFare)) fareRows.push({ label: 'Base Fare', value: `₹${pricing.baseFare}` });
+  if (isAmount(pricing?.convenienceFee)) {
+    fareRows.push({ label: 'Convenience Fee', value: `₹${pricing.convenienceFee}` });
+  }
+  if (isAmount(pricing?.tax)) fareRows.push({ label: 'Tax', value: `₹${pricing.tax}` });
+  if (isAmount(pricing?.discount)) {
+    fareRows.push({
+      label: 'Discount',
+      value: pricing.discount > 0 ? `-₹${pricing.discount}` : `₹${pricing.discount}`,
+    });
+  }
+  if (isAmount(pricing?.securityDeposit)) {
+    fareRows.push({ label: 'Security Deposit', value: `₹${pricing.securityDeposit}` });
+  }
+  const hasTotal = isAmount(pricing?.totalPayable);
+
+  const paymentStatus = String(payment?.status || '').trim().toUpperCase();
+  const paymentMethod = humanize(payment?.method);
+  const wasPaid =
+    Boolean(paymentMethod) &&
+    isAmount(payment?.paidAmount) &&
+    payment.paidAmount > 0 &&
+    (!paymentStatus || paymentStatus === 'PAID' || paymentStatus === 'REFUNDED');
+
+  const refundStatusCode = String(refund?.status || '').trim().toUpperCase();
+  const showRefund = Boolean(refundStatusCode) && refundStatusCode !== 'NOT_APPLICABLE';
+  const refundStatusText = humanize(refund?.status);
+  const refundCompleted = refundStatusCode === 'COMPLETED' || refundStatusCode === 'SUCCESS';
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -39,12 +87,14 @@ export function RideCompletedScreen({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.successCircle}>
-          <CheckIcon size={48} color="#16a34a" />
-        </View>
+        {isCancelled ? null : (
+          <View style={styles.successCircle}>
+            <CheckIcon size={48} color="#16a34a" />
+          </View>
+        )}
 
-        <Text style={styles.title}>Ride Completed!</Text>
-        <Text style={styles.subtitle}>Hope you had a great ride</Text>
+        <Text style={styles.title}>{isCancelled ? 'Ride Cancelled' : 'Ride Completed!'}</Text>
+        {isCancelled ? null : <Text style={styles.subtitle}>Hope you had a great ride</Text>}
 
         <View style={styles.card}>
           <View style={styles.summaryRow}>
@@ -55,39 +105,43 @@ export function RideCompletedScreen({
           <View style={styles.divider} />
 
           <Text style={styles.sectionTitle}>Fare Breakdown</Text>
-          <FareRow label="Base Fare" value={`₹${baseFare}`} />
-          <FareRow label="Distance Fare" value={`₹${distanceFare}`} />
-          <FareRow label="Time Fare" value={`₹${timeFare}`} />
+          {fareRows.map((row) => (
+            <FareRow key={row.label} label={row.label} value={row.value} />
+          ))}
           <View style={styles.divider} />
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>₹{total}</Text>
+            <Text style={styles.totalValue}>{hasTotal ? `₹${pricing?.totalPayable}` : '—'}</Text>
           </View>
         </View>
 
-        <View style={styles.walletCard}>
-          <Text style={styles.walletLabel}>Paid via Wallet</Text>
-          <Text style={styles.walletValue}>₹{total}</Text>
-        </View>
+        {wasPaid ? (
+          <View style={styles.walletCard}>
+            <Text style={styles.walletLabel}>Paid via {paymentMethod}</Text>
+            <Text style={styles.walletValue}>₹{payment?.paidAmount}</Text>
+          </View>
+        ) : null}
 
-        <View style={styles.depositCard}>
-          <View style={styles.depositRow}>
-            <View style={styles.depositIcon}>
-              <ShieldIcon size={22} color="#ffffff" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.depositLabel}>Security Deposit</Text>
-              <Text style={styles.depositAmount}>₹{deposit}</Text>
-              <View style={styles.refundBadge}>
-                <CheckIcon size={14} color="#ffffff" />
-                <Text style={styles.refundText}>Refund Initiated</Text>
+        {showRefund ? (
+          <View style={styles.depositCard}>
+            <View style={styles.depositRow}>
+              <View style={styles.depositIcon}>
+                <ShieldIcon size={22} color="#ffffff" />
               </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.depositLabel}>Refund</Text>
+                {isAmount(refund?.amount) ? (
+                  <Text style={styles.depositAmount}>₹{refund.amount}</Text>
+                ) : null}
+                <View style={styles.refundBadge}>
+                  {refundCompleted ? <CheckIcon size={14} color="#ffffff" /> : null}
+                  <Text style={styles.refundText}>{refundStatusText}</Text>
+                </View>
+              </View>
+              <ArrowRight color="#363636" />
             </View>
-            <ArrowRight color="#363636" />
           </View>
-          <View style={styles.depositDivider} />
-          <Text style={styles.depositNote}>✓ Refund processing - Expected in 3-5 business days</Text>
-        </View>
+        ) : null}
 
         <Pressable style={styles.downloadButton}>
           <DownloadIcon color="#fc4c02" />
@@ -96,7 +150,9 @@ export function RideCompletedScreen({
       </ScrollView>
 
       <View style={styles.footer}>
-        <GradientButton label="Rate Your Ride" onPress={onRate} height={52} />
+        {isCancelled ? null : (
+          <GradientButton label="Rate Your Ride" onPress={onRate} height={52} />
+        )}
         <Pressable style={styles.backHome} onPress={onHome}>
           <Text style={styles.backHomeText}>Back to Home</Text>
         </Pressable>
@@ -344,15 +400,6 @@ const RAW_STYLES = {
     fontSize: 11,
     fontWeight: '700',
     lineHeight: 14,
-  },
-  depositDivider: {
-    height: 1,
-    backgroundColor: 'rgba(218, 218, 218, 0.5)',
-  },
-  depositNote: {
-    color: '#016630',
-    fontSize: 12,
-    lineHeight: 16,
   },
   downloadButton: {
     marginTop: 16,

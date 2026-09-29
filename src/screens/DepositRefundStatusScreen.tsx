@@ -2,30 +2,116 @@ import { Pressable, SafeAreaView, ScrollView, Text, View } from 'react-native';
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
 import { ArrowLeftIcon, CheckIcon, ClockIcon, SmallInfoIcon } from '../components/RideIcons';
+import { formatDateTime } from '../utils/format';
 import { useStyles } from '../utils/responsiveStyles';
+
+export type RefundRecord = {
+  amount?: number;
+  status?: string;
+  method?: string;
+  referenceId?: string;
+  createdAt?: string;
+  failureReason?: string;
+};
+
+type RefundStep = {
+  label: string;
+  subtitle?: string;
+  state: 'done' | 'active' | 'pending';
+};
+
+const humanize = (value?: string) => {
+  const normalized = String(value || '').trim().replace(/_/g, ' ').toLowerCase();
+  if (!normalized) return '';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+const humanizeRefundStatus = (status?: string) => {
+  const normalized = String(status || '').trim().toUpperCase();
+  if (normalized === 'SUCCESS' || normalized === 'COMPLETED') return 'Completed';
+  if (normalized === 'PENDING') return 'Pending';
+  if (normalized === 'PROCESSING') return 'Processing';
+  if (normalized === 'FAILED') return 'Failed';
+  return humanize(status);
+};
+
+// Timeline is derived from the refund's real status only. Step dates are shown
+// only where the record actually carries one.
+const buildRefundSteps = (refund: RefundRecord, initiatedOn: string): RefundStep[] => {
+  const status = String(refund.status || '').trim().toUpperCase();
+  const initiated = { label: 'Refund Initiated', subtitle: initiatedOn || undefined };
+
+  if (status === 'SUCCESS' || status === 'COMPLETED') {
+    return [
+      { ...initiated, state: 'done' },
+      { label: 'Refund Processed', state: 'done' },
+      { label: 'Amount Credited', state: 'done' },
+    ];
+  }
+  if (status === 'PROCESSING') {
+    return [
+      { ...initiated, state: 'done' },
+      { label: 'Refund Processing', state: 'active' },
+      { label: 'Amount Credited', state: 'pending' },
+    ];
+  }
+  if (status === 'FAILED') {
+    return [
+      { ...initiated, state: 'done' },
+      { label: 'Refund Failed', subtitle: refund.failureReason || undefined, state: 'active' },
+    ];
+  }
+  if (status === 'INITIATED') {
+    return [
+      { ...initiated, state: 'done' },
+      { label: 'Refund Processing', state: 'pending' },
+      { label: 'Amount Credited', state: 'pending' },
+    ];
+  }
+  if (status === 'PENDING') {
+    return [
+      { ...initiated, state: 'active' },
+      { label: 'Refund Processing', state: 'pending' },
+      { label: 'Amount Credited', state: 'pending' },
+    ];
+  }
+  // Unknown status: show only what the record itself states.
+  const statusLabel = humanize(refund.status);
+  return [
+    {
+      label: statusLabel ? `Refund ${statusLabel}` : 'Refund',
+      subtitle: initiatedOn || undefined,
+      state: 'active',
+    },
+  ];
+};
 
 export function DepositRefundStatusScreen({
   onBack,
   onGoToWallet,
   onBackHome,
-  depositAmount = 1000,
-  transactionId = 'RFDGJWD1CO9KW',
-  expectedDate = '25 February 2026',
+  refund,
 }: {
   onBack: () => void;
   onGoToWallet: () => void;
   onBackHome: () => void;
-  depositAmount?: number;
-  transactionId?: string;
-  expectedDate?: string;
+  refund?: RefundRecord | null;
 }) {
   const styles = useStyles(RAW_STYLES);
-  const steps = [
-    { label: 'Ride Completed', subtitle: 'February 19, 2026 at 2:45 PM', state: 'done' as const },
-    { label: 'Verification Complete', subtitle: 'Vehicle inspected successfully', state: 'done' as const },
-    { label: 'Refund Initiated', subtitle: 'Processing refund to your payment method', state: 'active' as const },
-    { label: 'Amount Credited', subtitle: 'Pending', state: 'pending' as const },
-  ];
+
+  const amountLabel =
+    typeof refund?.amount === 'number' && Number.isFinite(refund.amount)
+      ? `₹${refund.amount}`
+      : '';
+  const statusCode = String(refund?.status || '').trim().toUpperCase();
+  const statusLabel = humanizeRefundStatus(refund?.status);
+  const methodLabel = humanize(refund?.method);
+  const initiatedOn = formatDateTime(refund?.createdAt);
+  const isCompleted = statusCode === 'SUCCESS' || statusCode === 'COMPLETED';
+  const isFailed = statusCode === 'FAILED';
+  const isInFlight =
+    statusCode === 'PENDING' || statusCode === 'INITIATED' || statusCode === 'PROCESSING';
+  const steps = refund ? buildRefundSteps(refund, initiatedOn) : [];
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -39,100 +125,129 @@ export function DepositRefundStatusScreen({
       </View>
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.successCard}>
-          <View style={styles.successCircle}>
-            <CheckIcon size={48} color="#00a63e" />
+        {!refund ? (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>No refund in progress</Text>
+            <Text style={styles.rowLabel}>
+              Refund details will appear here once a refund is initiated.
+            </Text>
           </View>
-          <Text style={styles.successAmount}>₹{depositAmount}</Text>
-          <Text style={styles.successLabel}>Security Deposit Refund</Text>
-          <View style={styles.successChip}>
-            <CheckIcon size={14} color="#ffffff" />
-            <Text style={styles.successChipText}>Refund Initiated</Text>
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Refund Progress</Text>
-          {steps.map((s, i) => (
-            <View key={s.label} style={styles.stepRow}>
-              <View style={styles.stepIconWrap}>
-                {s.state === 'done' ? (
-                  <View style={styles.stepDone}>
-                    <CheckIcon size={16} color="#ffffff" />
-                  </View>
-                ) : s.state === 'active' ? (
-                  <View style={styles.stepActive}>
-                    <Text style={styles.stepNum}>{i + 1}</Text>
-                  </View>
+        ) : (
+          <>
+            <View style={styles.successCard}>
+              <View style={styles.successCircle}>
+                {isCompleted ? (
+                  <CheckIcon size={48} color="#00a63e" />
+                ) : isFailed ? (
+                  <SmallInfoIcon size={48} color="#ffffff" />
                 ) : (
-                  <View style={styles.stepPending}>
-                    <Text style={styles.stepNum}>{i + 1}</Text>
-                  </View>
+                  <ClockIcon size={48} color="#ffffff" />
                 )}
-                {i < steps.length - 1 ? <View style={styles.stepConnector} /> : null}
               </View>
-              <View style={styles.stepBody}>
-                <Text
-                  style={[
-                    styles.stepLabel,
-                    s.state === 'pending' && styles.stepLabelMuted,
-                  ]}
-                >
-                  {s.label}
-                </Text>
-                <Text
-                  style={[
-                    styles.stepSubtitle,
-                    s.state === 'pending' && styles.stepLabelMuted,
-                  ]}
-                >
-                  {s.subtitle}
+              {amountLabel ? <Text style={styles.successAmount}>{amountLabel}</Text> : null}
+              <Text style={styles.successLabel}>Refund</Text>
+              {statusLabel ? (
+                <View style={styles.successChip}>
+                  {isCompleted ? <CheckIcon size={14} color="#ffffff" /> : null}
+                  <Text style={styles.successChipText}>{statusLabel}</Text>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Refund Progress</Text>
+              {steps.map((s, i) => (
+                <View key={s.label} style={styles.stepRow}>
+                  <View style={styles.stepIconWrap}>
+                    {s.state === 'done' ? (
+                      <View style={styles.stepDone}>
+                        <CheckIcon size={16} color="#ffffff" />
+                      </View>
+                    ) : s.state === 'active' ? (
+                      <View style={styles.stepActive}>
+                        <Text style={styles.stepNum}>{i + 1}</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.stepPending}>
+                        <Text style={styles.stepNum}>{i + 1}</Text>
+                      </View>
+                    )}
+                    {i < steps.length - 1 ? <View style={styles.stepConnector} /> : null}
+                  </View>
+                  <View style={styles.stepBody}>
+                    <Text
+                      style={[
+                        styles.stepLabel,
+                        s.state === 'pending' && styles.stepLabelMuted,
+                      ]}
+                    >
+                      {s.label}
+                    </Text>
+                    {s.subtitle ? (
+                      <Text
+                        style={[
+                          styles.stepSubtitle,
+                          s.state === 'pending' && styles.stepLabelMuted,
+                        ]}
+                      >
+                        {s.subtitle}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            {isInFlight ? (
+              <View style={styles.estimatedCard}>
+                <ClockIcon size={24} color="#1e40af" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.estimatedLabel}>Estimated Credit Time</Text>
+                  <Text style={styles.estimatedNote}>
+                    Refund typically takes 3-5 business days to reflect in your account
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Refund Details</Text>
+              {amountLabel ? (
+                <>
+                  <Row
+                    label="Refund Amount"
+                    boldLabel
+                    valueNode={<Text style={styles.refundAmountBig}>{amountLabel}</Text>}
+                  />
+                  <View style={styles.divider} />
+                </>
+              ) : null}
+              {statusLabel ? <Row label="Status" value={statusLabel} /> : null}
+              {methodLabel ? <Row label="Refund Method" value={methodLabel} /> : null}
+              {initiatedOn ? <Row label="Initiated On" value={initiatedOn} /> : null}
+              {isFailed && refund.failureReason ? (
+                <Row label="Failure Reason" value={refund.failureReason} />
+              ) : null}
+              {refund.referenceId ? (
+                <Row
+                  label="Transaction ID"
+                  valueNode={<Text style={styles.mono}>{refund.referenceId}</Text>}
+                />
+              ) : null}
+            </View>
+
+            <View style={styles.yellowCard}>
+              <SmallInfoIcon size={20} color="#a16207" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.yellowTitle}>Track Your Refund</Text>
+                <Text style={styles.yellowBody}>
+                  You can track the refund status anytime from the Wallet section. You&apos;ll also receive
+                  notifications when the amount is credited to your account.
                 </Text>
               </View>
             </View>
-          ))}
-        </View>
-
-        <View style={styles.estimatedCard}>
-          <ClockIcon size={24} color="#1e40af" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.estimatedLabel}>Estimated Credit Time</Text>
-            <Text style={styles.estimatedDate}>{expectedDate}</Text>
-            <Text style={styles.estimatedNote}>
-              Refund typically takes 3-5 business days to reflect in your account
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Refund Details</Text>
-          <Row label="Deposit Amount" value={`₹${depositAmount}`} />
-          <Row label="Deductions" value="₹0" valueColor="#16a34a" />
-          <View style={styles.divider} />
-          <Row label="Refund Amount" boldLabel valueNode={
-            <Text style={styles.refundAmountBig}>₹{depositAmount}</Text>
-          } />
-          <View style={styles.divider} />
-          <View style={styles.methodRow}>
-            <Text style={styles.rowLabel}>Refund Method</Text>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.rowValue}>Original Payment Method</Text>
-              <Text style={styles.methodMeta}>UPI / Card ending ****4532</Text>
-            </View>
-          </View>
-          <Row label="Transaction ID" valueNode={<Text style={styles.mono}>{transactionId}</Text>} />
-        </View>
-
-        <View style={styles.yellowCard}>
-          <SmallInfoIcon size={20} color="#a16207" />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.yellowTitle}>Track Your Refund</Text>
-            <Text style={styles.yellowBody}>
-              You can track the refund status anytime from the Wallet section. You&apos;ll also receive
-              notifications when the amount is credited to your account.
-            </Text>
-          </View>
-        </View>
+          </>
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -340,13 +455,6 @@ const RAW_STYLES = {
     fontWeight: '600',
     lineHeight: 20,
   },
-  estimatedDate: {
-    marginTop: 4,
-    color: '#1e40af',
-    fontSize: 20,
-    fontWeight: '700',
-    lineHeight: 28,
-  },
   estimatedNote: {
     marginTop: 8,
     color: '#1e40af',
@@ -382,18 +490,6 @@ const RAW_STYLES = {
   divider: {
     height: 1,
     backgroundColor: '#e5e7eb',
-  },
-  methodRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  methodMeta: {
-    marginTop: 4,
-    color: '#6b7280',
-    fontSize: 12,
-    lineHeight: 16,
   },
   mono: {
     color: '#101828',

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -10,18 +10,95 @@ import {
 import { AppBackground } from '../components/AppBackground';
 import { GradientButton } from '../components/GradientButton';
 import { GradientFill } from '../components/GradientFill';
-import { WheelPicker } from '../components/WheelPicker';
+import { WheelPicker, WheelPickerGroup } from '../components/WheelPicker';
 import { ArrowLeftIcon, CalendarIcon, ClockIcon } from '../components/RideIcons';
-import type { TimeSlotItem } from '../services/userApi';
+import { FONTS } from '../constants/fonts';
+import type { TimeSlotItem, TimeSlotWindow } from '../services/userApi';
 import { formatCurrency, formatTime12 } from '../utils/format';
 import { useStyles } from '../utils/responsiveStyles';
 import type { RidePlan } from './RidePlanScreen';
 
-const TIME_SLOTS = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00', '19:00'];
-
 type DateOption = {
   id: string;
   label: string;
+};
+
+type Period = 'AM' | 'PM';
+
+// Bookable range of one day, in minutes from midnight.
+type TimeRange = { open: number; min: number; max: number; step: number };
+
+// Drum-style time picker: the selected row plus three fading rows on each side.
+const TIME_WHEEL_ROWS = 7;
+const TIME_WHEEL_ROW_HEIGHT = 22;
+const TIME_WHEEL_FONT_SIZE = 16;
+const MINUTES_PER_HALF_DAY = 12 * 60;
+const HOURS_12 = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+
+const pad2 = (value: number) => String(value).padStart(2, '0');
+
+const toMinutes = (value?: string | null) => {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+};
+
+const toClock = (total: number) => `${pad2(Math.floor(total / 60))}:${pad2(total % 60)}`;
+
+const toHour24 = (hour12: number, period: Period) => (hour12 % 12) + (period === 'PM' ? 12 : 0);
+
+// The range always comes from the backend: its booking window when it sends
+// one, otherwise the first and last slot it returned. No data, no range.
+const resolveTimeRange = (
+  timeWindow?: TimeSlotWindow | null,
+  slots?: TimeSlotItem[] | null,
+): TimeRange | null => {
+  if (timeWindow) {
+    const open = toMinutes(timeWindow.openTime);
+    const max = toMinutes(timeWindow.closeTime);
+    const min = toMinutes(timeWindow.earliestTime);
+    if (max == null || min == null || min > max) return null;
+    const step =
+      typeof timeWindow.minuteStep === 'number' &&
+      Number.isInteger(timeWindow.minuteStep) &&
+      timeWindow.minuteStep >= 1 &&
+      timeWindow.minuteStep <= 30
+        ? timeWindow.minuteStep
+        : 1;
+    return { open: open ?? min, min, max, step };
+  }
+
+  const all = (slots ?? [])
+    .map((slot) => toMinutes(slot.value))
+    .filter((value): value is number => value != null);
+  const enabled = (slots ?? [])
+    .filter((slot) => !slot.disabled)
+    .map((slot) => toMinutes(slot.value))
+    .filter((value): value is number => value != null);
+  if (enabled.length === 0) return null;
+  return {
+    open: Math.min(...all),
+    min: Math.min(...enabled),
+    max: Math.max(...enabled),
+    step: 1,
+  };
+};
+
+const isBookable = (total: number, range: TimeRange) =>
+  total >= range.min && total <= range.max && (total % 60) % range.step === 0;
+
+// Nearest bookable minute to the requested one.
+const clampToRange = (total: number, range: TimeRange) => {
+  const bounded = Math.min(range.max, Math.max(range.min, total));
+  if (isBookable(bounded, range)) return bounded;
+  for (let offset = 1; offset <= 60; offset += 1) {
+    if (isBookable(bounded + offset, range)) return bounded + offset;
+    if (isBookable(bounded - offset, range)) return bounded - offset;
+  }
+  return null;
 };
 
 export function TimeSlotScreen({
@@ -30,19 +107,22 @@ export function TimeSlotScreen({
   onDateChange,
   plan,
   slots,
+  timeWindow,
 }: {
   onBack: () => void;
   onContinue: (selection: { date: string; time: string; duration: string; plan: RidePlan }) => void;
   onDateChange?: (dateId: string) => void;
   plan?: RidePlan | null;
   slots?: TimeSlotItem[] | null;
+  timeWindow?: TimeSlotWindow | null;
 }) {
   const styles = useStyles(RAW_STYLES);
-  const selectedPlan = plan || DEFAULT_PLAN;
+  const selectedPlan = plan ?? null;
   const baseDates = useMemo(() => buildDateOptions(), []);
   const [customDate, setCustomDate] = useState<{ id: string; label: string } | null>(null);
   const [selectedDate, setSelectedDate] = useState(baseDates[0]?.id || 'today');
-  const [selectedTime, setSelectedTime] = useState('10:00');
+  // Chosen start time in minutes from midnight; null until the backend range is known.
+  const [selectedMinutes, setSelectedMinutes] = useState<number | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // Let the parent refetch slots for the chosen date (tomorrow / future days
@@ -59,26 +139,93 @@ export function TimeSlotScreen({
     return baseDates;
   }, [baseDates, customDate]);
 
-  const availableTimeSlots = useMemo(
+  const range = useMemo(() => resolveTimeRange(timeWindow, slots), [timeWindow, slots]);
+
+  // Keep the selection inside the bookable range (first load, date change).
+  useEffect(() => {
+    if (!range) {
+      if (selectedMinutes != null) setSelectedMinutes(null);
+      return;
+    }
+    if (selectedMinutes != null && isBookable(selectedMinutes, range)) return;
+    const next = clampToRange(selectedMinutes ?? range.min, range);
+    if (next !== selectedMinutes) setSelectedMinutes(next);
+  }, [range, selectedMinutes]);
+
+  const selected = range && selectedMinutes != null && isBookable(selectedMinutes, range)
+    ? selectedMinutes
+    : null;
+  const selectedPeriod: Period = selected != null && selected >= MINUTES_PER_HALF_DAY ? 'PM' : 'AM';
+  const selectedHour24 = selected != null ? Math.floor(selected / 60) : 0;
+  const selectedHour12 = selectedHour24 % 12 === 0 ? 12 : selectedHour24 % 12;
+  const selectedMinute = selected != null ? selected % 60 : 0;
+
+  const hourItems = useMemo(
     () =>
-      slots && slots.length > 0
-        ? slots
-        : TIME_SLOTS.map((slot) => ({ label: formatTime12(slot), value: slot, disabled: false })),
-    [slots],
+      HOURS_12.map((hour12) => {
+        const start = toHour24(hour12, selectedPeriod) * 60;
+        const hasBookableMinute =
+          range != null &&
+          Array.from({ length: 60 }, (_, minute) => start + minute).some((total) =>
+            isBookable(total, range),
+          );
+        return { label: String(hour12), value: String(hour12), disabled: !hasBookableMinute };
+      }),
+    [range, selectedPeriod],
   );
 
-  useEffect(() => {
-    const firstAvailable =
-      availableTimeSlots.find((slot) => !slot.disabled)?.value || availableTimeSlots[0]?.value;
-    if (firstAvailable && !availableTimeSlots.some((slot) => slot.value === selectedTime && !slot.disabled)) {
-      setSelectedTime(firstAvailable);
+  const minuteItems = useMemo(() => {
+    const step = range?.step ?? 1;
+    const items = [];
+    for (let minute = 0; minute < 60; minute += step) {
+      items.push({
+        label: pad2(minute),
+        value: pad2(minute),
+        disabled: range == null || !isBookable(selectedHour24 * 60 + minute, range),
+      });
     }
-  }, [availableTimeSlots, selectedTime]);
+    return items;
+  }, [range, selectedHour24]);
+
+  const periodItems = useMemo(
+    () =>
+      (['AM', 'PM'] as Period[]).map((period) => {
+        const start = period === 'PM' ? MINUTES_PER_HALF_DAY : 0;
+        const end = start + MINUTES_PER_HALF_DAY - 1;
+        return {
+          label: period,
+          value: period,
+          disabled: range == null || range.max < start || range.min > end,
+        };
+      }),
+    [range],
+  );
+
+  const pickTime = useCallback(
+    (total: number) => {
+      if (!range) return;
+      const next = clampToRange(total, range);
+      if (next != null) setSelectedMinutes(next);
+    },
+    [range],
+  );
+
+  const pickHour = (value: string) =>
+    pickTime(toHour24(Number(value), selectedPeriod) * 60 + selectedMinute);
+  const pickMinute = (value: string) => pickTime(selectedHour24 * 60 + Number(value));
+  const pickPeriod = (value: string) =>
+    pickTime(toHour24(selectedHour12, value as Period) * 60 + selectedMinute);
+
+  // While a finger is on the wheels the page must not scroll under them,
+  // otherwise both scroll views fight over the gesture.
+  const pageScrollRef = useRef<ScrollView | null>(null);
+  const setWheelActive = useCallback((active: boolean) => {
+    pageScrollRef.current?.setNativeProps({ scrollEnabled: !active });
+  }, []);
 
   const selectedDateLabel = dates.find((d) => d.id === selectedDate)?.label || 'Today';
-  const selectedTimeLabel =
-    availableTimeSlots.find((slot) => slot.value === selectedTime)?.label ||
-    formatTime12(selectedTime);
+  const selectedTimeLabel = selected != null ? formatTime12(toClock(selected)) : '';
+  const canContinue = Boolean(selectedPlan && selected != null);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -92,6 +239,7 @@ export function TimeSlotScreen({
       </View>
 
       <ScrollView
+        ref={pageScrollRef}
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -123,14 +271,64 @@ export function TimeSlotScreen({
 
         <View style={styles.sectionSpacer} />
         <SectionHeader icon={<ClockIcon size={18} color="#fc4c02" />} label="Start Time" />
-        <WheelPicker items={availableTimeSlots} value={selectedTime} onChange={setSelectedTime} />
-        <Text style={styles.wheelHint}>Scroll to pick your start time</Text>
+        {range && selected != null ? (
+          <>
+            <WheelPickerGroup
+              visibleRows={TIME_WHEEL_ROWS}
+              itemHeight={TIME_WHEEL_ROW_HEIGHT}
+              onInteractionChange={setWheelActive}
+            >
+              <WheelPicker
+                bare
+                visibleRows={TIME_WHEEL_ROWS}
+                itemHeight={TIME_WHEEL_ROW_HEIGHT}
+                fontSize={TIME_WHEEL_FONT_SIZE}
+                align="right"
+                items={hourItems}
+                value={String(selectedHour12)}
+                onChange={pickHour}
+              />
+              <WheelPicker
+                bare
+                visibleRows={TIME_WHEEL_ROWS}
+                itemHeight={TIME_WHEEL_ROW_HEIGHT}
+                fontSize={TIME_WHEEL_FONT_SIZE}
+                items={minuteItems}
+                value={pad2(selectedMinute)}
+                onChange={pickMinute}
+              />
+              <WheelPicker
+                bare
+                visibleRows={TIME_WHEEL_ROWS}
+                itemHeight={TIME_WHEEL_ROW_HEIGHT}
+                fontSize={TIME_WHEEL_FONT_SIZE}
+                align="left"
+                items={periodItems}
+                value={selectedPeriod}
+                onChange={pickPeriod}
+              />
+            </WheelPickerGroup>
+            <Text style={styles.wheelHint}>
+              Pick any time between {formatTime12(toClock(range.open))} and{' '}
+              {formatTime12(toClock(range.max))}
+            </Text>
+          </>
+        ) : (
+          <Text style={styles.wheelHint}>No time slots available for this date.</Text>
+        )}
 
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Booking Summary</Text>
-          <SummaryRow label="Start" value={`${selectedDateLabel}, ${selectedTimeLabel}`} />
-          <SummaryRow label="Duration" value={selectedPlan.duration} />
-          <SummaryRow label="Plan Price" value={formatCurrency(selectedPlan.price)} accent />
+          <SummaryRow
+            label="Start"
+            value={selectedTimeLabel ? `${selectedDateLabel}, ${selectedTimeLabel}` : '—'}
+          />
+          <SummaryRow label="Duration" value={selectedPlan?.duration || '—'} />
+          <SummaryRow
+            label="Plan Price"
+            value={selectedPlan?.price != null ? formatCurrency(selectedPlan.price) : '—'}
+            accent
+          />
           <Text style={styles.summaryHint}>
             Security deposit, convenience fee & taxes will be added on the confirmation screen.
           </Text>
@@ -140,14 +338,16 @@ export function TimeSlotScreen({
       <View style={styles.footer}>
         <GradientButton
           label="Continue"
-          onPress={() =>
+          disabled={!canContinue}
+          onPress={() => {
+            if (!selectedPlan || selected == null) return;
             onContinue({
               date: selectedDate,
-              time: selectedTime,
+              time: toClock(selected),
               duration: selectedPlan.duration,
               plan: selectedPlan,
-            })
-          }
+            });
+          }}
           height={56}
         />
       </View>
@@ -356,17 +556,6 @@ function buildDateOptions(): DateOption[] {
   return options;
 }
 
-const DEFAULT_PLAN: RidePlan = {
-  id: 'hourly',
-  title: 'Hourly',
-  duration: '1 Hour',
-  price: 49,
-  rateLabel: '/hr',
-  bullets: [],
-  validity: '',
-  extraCharges: '',
-};
-
 const RAW_STYLES = {
   safe: {
     flex: 1,
@@ -390,17 +579,18 @@ const RAW_STYLES = {
   },
   headerTitle: {
     marginLeft: 8,
-    color: '#0f172a',
-    fontSize: 21,
-    fontWeight: '500',
-    lineHeight: 32,
+    color: '#1e293b',
+    fontFamily: FONTS.semiBold,
+    fontSize: 20,
+    fontWeight: '600',
+    lineHeight: 28,
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 14,
-    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingTop: 20,
     paddingBottom: 120,
   },
   sectionHeader: {
@@ -410,7 +600,8 @@ const RAW_STYLES = {
     marginBottom: 10,
   },
   sectionHeaderText: {
-    color: '#0f172a',
+    color: '#1e293b',
+    fontFamily: FONTS.semiBold,
     fontSize: 16,
     fontWeight: '600',
     lineHeight: 24,
@@ -425,21 +616,23 @@ const RAW_STYLES = {
     height: 52,
     paddingHorizontal: 16,
     marginBottom: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
-    borderColor: '#fc4c02',
+    borderColor: 'rgba(255, 255, 255, 0.62)',
   },
   dateFieldText: {
     flex: 1,
-    color: '#0f172a',
+    color: '#1e293b',
+    fontFamily: FONTS.semiBold,
     fontSize: 15,
     fontWeight: '600',
   },
   dateFieldHint: {
     color: '#fc4c02',
+    fontFamily: FONTS.medium,
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   dateRow: {
     flexDirection: 'row',
@@ -449,14 +642,15 @@ const RAW_STYLES = {
     marginTop: 8,
     textAlign: 'center',
     color: '#64748b',
-    fontSize: 11,
-    lineHeight: 15,
+    fontFamily: FONTS.regular,
+    fontSize: 12,
+    lineHeight: 16,
   },
   chip: {
     flexBasis: '23%',
     flexGrow: 1,
     paddingHorizontal: 12,
-    borderRadius: 10,
+    borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.62)',
@@ -471,7 +665,8 @@ const RAW_STYLES = {
     opacity: 0.4,
   },
   chipText: {
-    color: '#0f172a',
+    color: '#1e293b',
+    fontFamily: FONTS.medium,
     fontWeight: '500',
     lineHeight: 18,
     textAlign: 'center',
@@ -484,18 +679,19 @@ const RAW_STYLES = {
   },
   summaryCard: {
     marginTop: 24,
-    borderRadius: 10,
+    borderRadius: 24,
     backgroundColor: 'rgba(255, 255, 255, 0.3)',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.62)',
-    padding: 15,
-    gap: 7,
+    padding: 20,
+    gap: 8,
   },
   summaryTitle: {
-    color: '#0f172a',
-    fontSize: 14,
+    color: '#1e293b',
+    fontFamily: FONTS.semiBold,
+    fontSize: 15,
     fontWeight: '600',
-    lineHeight: 21,
+    lineHeight: 22,
     marginBottom: 4,
   },
   summaryRow: {
@@ -505,14 +701,16 @@ const RAW_STYLES = {
   },
   summaryLabel: {
     color: '#64748b',
-    fontSize: 12,
-    lineHeight: 18,
+    fontFamily: FONTS.regular,
+    fontSize: 13,
+    lineHeight: 19,
   },
   summaryValue: {
-    color: '#0f172a',
-    fontSize: 12,
+    color: '#1e293b',
+    fontFamily: FONTS.medium,
+    fontSize: 13,
     fontWeight: '500',
-    lineHeight: 18,
+    lineHeight: 19,
   },
   summaryAccent: {
     color: '#fc4c02',
@@ -521,6 +719,7 @@ const RAW_STYLES = {
   summaryHint: {
     marginTop: 4,
     color: '#64748b',
+    fontFamily: FONTS.regular,
     fontSize: 11,
     lineHeight: 15,
   },
@@ -538,16 +737,18 @@ const RAW_STYLES = {
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    backgroundColor: 'rgba(15, 23, 42, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
   modalCard: {
     width: '100%',
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    padding: 18,
+    backgroundColor: 'rgba(255, 244, 236, 0.94)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+    borderRadius: 24,
+    padding: 20,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -556,9 +757,10 @@ const RAW_STYLES = {
     marginBottom: 12,
   },
   modalTitle: {
-    color: '#0f172a',
+    color: '#1e293b',
+    fontFamily: FONTS.semiBold,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   monthNav: {
     width: 36,
@@ -566,7 +768,9 @@ const RAW_STYLES = {
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#fff5ed',
+    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
   },
   monthNavDisabled: {
     opacity: 0.3,

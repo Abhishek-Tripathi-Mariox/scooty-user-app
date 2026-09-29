@@ -11,7 +11,7 @@ import { HomeScreen } from './src/screens/HomeScreen';
 import { EditLocationScreen } from './src/screens/EditLocationScreen';
 import { PermissionsScreen } from './src/screens/PermissionsScreen';
 import { SearchScreen } from './src/screens/SearchScreen';
-import { RidePlanScreen, type RidePlan, type RidePlanId } from './src/screens/RidePlanScreen';
+import { RidePlanScreen, type RidePlan, type RidePlanKind } from './src/screens/RidePlanScreen';
 import { TimeSlotScreen } from './src/screens/TimeSlotScreen';
 import { PickupStationScreen, type PickupStation } from './src/screens/PickupStationScreen';
 import { BookingsScreen } from './src/screens/BookingsScreen';
@@ -52,6 +52,7 @@ import {
   StationItem,
   SupportFaq,
   TimeSlotItem,
+  TimeSlotWindow,
   User,
   userApi,
   userApiErrorMessage,
@@ -99,19 +100,15 @@ type AppStep =
   | 'booking-detail'
   | 'booking-receipt';
 
-const mapPlanTypeToRidePlanId = (type?: string): RidePlanId => {
+// Plan category from the backend plan type. Unknown types stay undefined
+// instead of being guessed.
+const mapPlanTypeToRidePlanKind = (type?: string): RidePlanKind | undefined => {
   const normalized = String(type || '').trim().toUpperCase();
+  if (normalized === 'HOURLY') return 'hourly';
   if (normalized === 'DAY_PASS' || normalized === 'FULL_DAY') return 'full-day';
   if (normalized === 'WEEKLY') return 'weekly';
   if (normalized === 'MONTHLY') return 'monthly';
-  return 'hourly';
-};
-
-const mapRidePlanIdToPlanCode = (id?: RidePlanId | null) => {
-  if (id === 'full-day') return 'DAY_PASS';
-  if (id === 'weekly') return 'WEEKLY';
-  if (id === 'monthly') return 'MONTHLY';
-  return 'HOURLY';
+  return undefined;
 };
 
 // Stations are only shown within this distance of the selected location.
@@ -157,37 +154,49 @@ const UserAuthStorage = NativeModules.UserAuthStorage as
     }
   | undefined;
 
-const mapBackendPlanToRidePlan = (plan: PlanItem): RidePlan => {
-  const id = mapPlanTypeToRidePlanId(plan.type);
-  const price = Number(plan.price ?? 0);
-  const durationHours = Number(plan.durationHours ?? 1);
+const mapBackendPlanToRidePlan = (plan: PlanItem, index = 0): RidePlan => {
+  const kind = mapPlanTypeToRidePlanKind(plan.type);
+  const price =
+    typeof plan.price === 'number' && Number.isFinite(plan.price) ? plan.price : null;
+  const durationHours =
+    typeof plan.durationHours === 'number' && Number.isFinite(plan.durationHours)
+      ? plan.durationHours
+      : null;
   const title =
     plan.name ||
-    (id === 'hourly'
+    (kind === 'hourly'
       ? 'Hourly'
-      : id === 'full-day'
+      : kind === 'full-day'
         ? 'Full Day'
-        : id === 'weekly'
+        : kind === 'weekly'
           ? 'Weekly'
-          : 'Monthly');
+          : kind === 'monthly'
+            ? 'Monthly'
+            : 'Plan');
 
   return {
-    id,
-    code: plan.code || mapRidePlanIdToPlanCode(id),
+    // Unique per backend plan so two plans of the same type never collide.
+    id: String(plan._id || plan.code || `plan-${index}`),
+    kind,
+    code: plan.code || undefined,
     title,
-    duration: `${durationHours} Hour${durationHours === 1 ? '' : 's'}`,
+    // Empty when the backend sent no duration; screens render a dash.
+    duration: durationHours != null ? `${durationHours} Hour${durationHours === 1 ? '' : 's'}` : '',
     price,
     rateLabel:
-      id === 'hourly'
+      kind === 'hourly'
         ? '/hr'
-        : id === 'full-day'
+        : kind === 'full-day'
           ? '/day'
-          : id === 'weekly'
+          : kind === 'weekly'
             ? '/7 days'
-            : '/30 days',
+            : kind === 'monthly'
+              ? '/30 days'
+              : '',
     bullets: plan.perks && plan.perks.length > 0 ? plan.perks : [],
     validity: plan.description || '',
     extraCharges: plan.securityDeposit ? `₹${plan.securityDeposit} security deposit` : '',
+    badge: plan.badge || undefined,
   };
 };
 
@@ -196,20 +205,21 @@ const mapStationToPickupStation = (station: StationItem, fallbackId: string): Pi
     typeof station.distanceKm === 'number' && Number.isFinite(station.distanceKm)
       ? station.distanceKm
       : null;
-  const walkMinutes = distanceKm != null ? Math.max(1, Math.round(distanceKm * 12)) : null;
   const battery =
     typeof station.averageBatteryPercent === 'number' && Number.isFinite(station.averageBatteryPercent)
       ? `${station.averageBatteryPercent}%`
-      : '—';
+      : undefined;
 
   return {
     id: station._id || fallbackId,
     name: station.name || 'Station unavailable',
     address: station.address || 'Address unavailable',
-    distance: distanceKm != null ? `${distanceKm.toFixed(1)} km` : '—',
-    available: Number(station.availableScooters ?? 0),
+    distance: distanceKm != null ? `${distanceKm.toFixed(1)} km` : undefined,
+    available:
+      typeof station.availableScooters === 'number' && Number.isFinite(station.availableScooters)
+        ? station.availableScooters
+        : null,
     battery,
-    parking: walkMinutes != null ? `${walkMinutes} min walk` : '—',
     coordinates:
       typeof station.coordinates?.latitude === 'number' &&
       typeof station.coordinates?.longitude === 'number'
@@ -218,7 +228,28 @@ const mapStationToPickupStation = (station: StationItem, fallbackId: string): Pi
   };
 };
 
-const resolveRidePlanCode = (plan?: RidePlan | null) => plan?.code || mapRidePlanIdToPlanCode(plan?.id || null);
+const resolveRidePlanCode = (plan?: RidePlan | null) => plan?.code || undefined;
+
+// Real ride duration: actual minutes when the backend recorded them, else the
+// booked hours. Cancelled rides never fall back to the booked hours.
+const formatRideDuration = (ride?: RideItem | null) => {
+  if (!ride) return undefined;
+  const minutes = ride.actualDurationMinutes;
+  if (typeof minutes === 'number' && Number.isFinite(minutes) && minutes > 0) {
+    const rounded = Math.round(minutes);
+    const hours = Math.floor(rounded / 60);
+    const rest = rounded % 60;
+    if (hours > 0 && rest > 0) return `${hours} hr ${rest} min`;
+    if (hours > 0) return `${hours} hr`;
+    return `${rest} min`;
+  }
+  const isCancelled = String(ride.status || '').trim().toUpperCase() === 'CANCELLED';
+  const hours = ride.durationHours;
+  if (!isCancelled && typeof hours === 'number' && Number.isFinite(hours) && hours > 0) {
+    return `${hours} hr`;
+  }
+  return undefined;
+};
 
 const resolveBookingDate = (selection: string) => {
   const today = new Date();
@@ -272,7 +303,8 @@ const formatScheduleLabel = (selection?: { date: string; time: string; duration:
           ? selection.date
           : parsed.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
 
-  return `${dateLabel}, ${formatTime12(selection.time)} • ${selection.duration}`;
+  const startLabel = `${dateLabel}, ${formatTime12(selection.time)}`;
+  return selection.duration ? `${startLabel} • ${selection.duration}` : startLabel;
 };
 
 export default function App() {
@@ -329,6 +361,7 @@ export default function App() {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<{ date: string; time: string; duration: string } | null>(null);
   const [availableRidePlans, setAvailableRidePlans] = useState<RidePlan[]>([]);
   const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlotItem[]>([]);
+  const [timeWindow, setTimeWindow] = useState<TimeSlotWindow | null>(null);
   // Date id ('today' | 'tomorrow' | 'YYYY-MM-DD') currently selected on the time-slot screen.
   const [slotDateId, setSlotDateId] = useState('today');
   const [bookingQuote, setBookingQuote] = useState<BookingQuote | null>(null);
@@ -583,12 +616,16 @@ export default function App() {
       .then((result) => {
         if (!active) return;
         setAvailableTimeSlots(result.slots || []);
+        setTimeWindow(result.window || null);
         if (result.plan) {
           setSelectedRidePlan(mapBackendPlanToRidePlan(result.plan));
         }
       })
       .catch(() => {
-        if (active) setAvailableTimeSlots([]);
+        if (active) {
+          setAvailableTimeSlots([]);
+          setTimeWindow(null);
+        }
       });
     return () => {
       active = false;
@@ -646,7 +683,6 @@ export default function App() {
           setSelectedRide({
             ...result.booking,
             status: 'ongoing',
-            distance: 0,
             fare: result.booking.pricing?.totalPayable,
           });
           setStep('ride-progress');
@@ -679,6 +715,8 @@ export default function App() {
     if (!token || step !== 'confirm-ride') return;
     if (!selectedRidePlan || !selectedPickupStation || !selectedDropStation || !selectedTimeSlot) return;
     let active = true;
+    // Drop any quote from a previous selection so stale amounts are never shown.
+    setBookingQuote(null);
     void userApi
       .bookingQuote(token, {
         pickupStationId: selectedPickupStation.id,
@@ -786,6 +824,8 @@ export default function App() {
 
       const notificationsResult = await userApi.notifications(token);
       setNotifications(notificationsResult.notifications);
+
+      void loadReferral();
 
       try {
         const transactionsResult = await userApi.transactions(token, { limit: 20 });
@@ -1131,6 +1171,7 @@ export default function App() {
     setBookingQuote(null);
     setCreatedBooking(null);
     setAvailableTimeSlots([]);
+    setTimeWindow(null);
     if (mappedStation) {
       setSelectedPickupStation(mappedStation);
     }
@@ -1354,6 +1395,7 @@ export default function App() {
           setBookings(null);
           setNotifications(null);
           setTransactions(null);
+          setReferral(null);
           setSelectedRide(null);
           setSelectedRidePlan(null);
           setSelectedPickupStation(null);
@@ -1361,6 +1403,7 @@ export default function App() {
           setSelectedTimeSlot(null);
           setAvailableRidePlans([]);
           setAvailableTimeSlots([]);
+          setTimeWindow(null);
           setBookingQuote(null);
           setCreatedBooking(null);
           setBookingBusy(false);
@@ -1376,7 +1419,7 @@ export default function App() {
   const buildBookingDate = (selection: string) => resolveBookingDate(selection);
 
   const handleConfirmBooking = async (
-    paymentMethodId: 'CASH' | 'WALLET' | 'UPI' | 'NETBANKING' = 'CASH',
+    paymentMethodId: 'CASH' | 'WALLET' = 'CASH',
   ) => {
     if (!token || !selectedRidePlan || !selectedPickupStation || !selectedDropStation || !selectedTimeSlot) {
       Alert.alert('Missing details', 'Please choose a plan, time slot, pickup station, and drop station before continuing.');
@@ -1412,7 +1455,7 @@ export default function App() {
       if (paymentMethodId === 'WALLET' && walletBalance < totalPayable) {
         Alert.alert(
           'Insufficient wallet balance',
-          `Your wallet has ${formatCurrency(walletBalance)} but the booking total is ${formatCurrency(totalPayable)}. Choose Cash or top up your wallet.`,
+          `Your wallet has ${formatCurrency(walletBalance)} but the booking total is ${formatCurrency(totalPayable)}. Please choose Cash.`,
         );
         return;
       }
@@ -1462,7 +1505,6 @@ export default function App() {
         dropStation: normalizedBooking?.dropStation || bookingResult.booking.dropStation,
         scooter: normalizedBooking?.scooter || bookingResult.booking.scooter,
         schedule: normalizedBooking?.schedule || bookingResult.booking.schedule,
-        distance: 0,
         fare: normalizedBooking?.pricing?.totalPayable || bookingResult.booking.pricing?.totalPayable,
       });
 
@@ -1551,8 +1593,8 @@ export default function App() {
       setSelectedRide({
         ...result.booking,
         status: 'completed',
-        distance: result.booking.distance || 0,
-        fare: result.booking.pricing?.totalPayable || 0,
+        distance: result.booking.distance,
+        fare: result.booking.pricing?.totalPayable,
       });
 
       try {
@@ -1797,6 +1839,7 @@ export default function App() {
         onReferPress={() => setStep('offers')}
         onLocationPress={() => setStep('edit-location')}
         onWalletPress={() => setStep('wallet')}
+        inviteReward={referral?.inviteReward}
       />
     );
   }
@@ -1840,7 +1883,7 @@ export default function App() {
     return (
       <RidePlanScreen
         onBack={() => setStep('dashboard')}
-        selectedPlan={selectedRidePlan?.id as RidePlanId | null}
+        selectedPlan={selectedRidePlan?.id ?? null}
         plans={availableRidePlans}
         onSelectPlan={(planId) => {
           setSelectedRidePlan(availableRidePlans.find((plan) => plan.id === planId) || null);
@@ -1859,6 +1902,7 @@ export default function App() {
         onBack={() => setStep('ride-plan')}
         plan={selectedRidePlan}
         slots={availableTimeSlots}
+        timeWindow={timeWindow}
         onDateChange={setSlotDateId}
         onContinue={(selection) => {
           setSelectedTimeSlot({
@@ -1907,7 +1951,6 @@ export default function App() {
             setSelectedRide({
               ...booking,
               status: 'ongoing',
-              distance: 0,
               fare: booking.pricing?.totalPayable,
             });
             setStep('ride-progress');
@@ -2090,23 +2133,30 @@ export default function App() {
       <MyWalletScreen
         onBack={() => setStep('dashboard')}
         onTabPress={handleTabPress}
-        balance={dashboard?.walletBalance ?? 0}
+        balance={dashboard?.walletBalance ?? user?.walletBalance}
         transactions={transactions}
         activeTab={activeTab}
         onOpenRefundStatus={() => setStep('refund-status')}
-        onRecharge={(amount) => {
-          Alert.alert(
-            'Recharge requested',
-            `Top-up of ${formatCurrency(amount)} has been recorded. Your wallet will reflect the credit shortly.`,
-          );
-        }}
       />
     );
   }
 
   if (step === 'refund-status') {
+    // Transactions arrive newest first, so the first REFUND is the latest one
+    // (same record the wallet screen's refund card shows).
+    const latestRefund = transactions?.find((tx) => tx.type === 'REFUND') || null;
     return (
       <DepositRefundStatusScreen
+        refund={
+          latestRefund
+            ? {
+                amount: latestRefund.amount,
+                status: latestRefund.status,
+                referenceId: latestRefund.referenceId,
+                createdAt: latestRefund.createdAt,
+              }
+            : null
+        }
         onBack={() => setStep('wallet')}
         onGoToWallet={() => setStep('wallet')}
         onBackHome={() => {
@@ -2126,10 +2176,12 @@ export default function App() {
           setStep('dashboard');
         }}
         onRate={() => setStep('rate')}
-        duration={selectedRide?.schedule?.startLabel || selectedRide?.startAt || '—'}
-        distance={selectedRide?.distance || 0}
-        fare={selectedRide?.pricing?.totalPayable ?? selectedRide?.fare}
-        securityDeposit={selectedRide?.pricing?.securityDeposit ?? 0}
+        status={selectedRide?.status}
+        duration={formatRideDuration(selectedRide)}
+        distance={selectedRide?.distance}
+        pricing={selectedRide?.pricing}
+        payment={selectedRide?.payment}
+        refund={selectedRide?.refund}
       />
     );
   }
@@ -2139,22 +2191,13 @@ export default function App() {
       <ConfirmRideScreen
         onBack={() => setStep('drop-station')}
         onConfirm={() => setStep('payment-mode')}
-        scootyId={
-          createdBooking?.scooter?.registrationNumber ||
-          bookingQuote?.scooter?.registrationNumber ||
-          (selectedPickupStation ? `SC${String(selectedPickupStation.id).padStart(3, '0')}` : 'Unavailable')
-        }
-        scootyBattery={0}
-        scootyRange={0}
-        farePerMinute={selectedRidePlan?.id === 'monthly' ? 2 : 3}
-        farePerKilometer={selectedRidePlan?.id === 'weekly' ? 6 : 8}
-        destinations={[]}
         loading={bookingBusy}
         planName={selectedRidePlan?.title}
         pickupStationName={selectedPickupStation?.name}
         dropStationName={selectedDropStation?.name}
         scheduleLabel={formatScheduleLabel(selectedTimeSlot)}
-        estimatedTotal={bookingQuote?.pricing?.totalPayable || createdBooking?.pricing?.totalPayable || selectedRidePlan?.price}
+        endLabel={bookingQuote?.schedule?.endLabel}
+        walletBalance={dashboard?.walletBalance ?? user?.walletBalance}
         pricing={bookingQuote?.pricing}
       />
     );
@@ -2165,13 +2208,8 @@ export default function App() {
       <PaymentModeScreen
         onBack={() => setStep('confirm-ride')}
         onConfirm={handleConfirmBooking}
-        amount={
-          bookingQuote?.pricing?.totalPayable ||
-          createdBooking?.pricing?.totalPayable ||
-          selectedRidePlan?.price ||
-          0
-        }
-        walletBalance={Number(user?.walletBalance ?? dashboard?.walletBalance ?? 0)}
+        amount={bookingQuote?.pricing?.totalPayable}
+        walletBalance={dashboard?.walletBalance ?? user?.walletBalance}
         loading={bookingBusy}
       />
     );
@@ -2195,7 +2233,7 @@ export default function App() {
         rideStartsIn={rideStartsInLabel(currentBooking?.startAt || bookingQuote?.schedule?.startAt)}
         bookingId={currentBooking?._id || 'Unavailable'}
         planType={currentBooking?.planName || selectedRidePlan?.title || 'Plan unavailable'}
-        amount={currentBooking?.pricing?.totalPayable || bookingQuote?.pricing?.totalPayable || selectedRidePlan?.price}
+        amount={currentBooking?.pricing?.totalPayable ?? bookingQuote?.pricing?.totalPayable}
         pickupStationName={currentBooking?.pickupStation?.name || selectedPickupStation?.name}
         dropStationName={currentBooking?.dropStation?.name || selectedRide?.dropStation?.name}
         timeSlot={

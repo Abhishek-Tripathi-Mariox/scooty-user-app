@@ -19,8 +19,22 @@ type HistoryRow = {
   dateTime: string;
   duration: string;
   distance: string;
-  amount: number;
-  status: 'Completed' | 'Penalty';
+  amount: string;
+  status: string;
+  cancelled: boolean;
+};
+
+// Badge text comes from the ride's real status.
+const humanizeRideStatus = (status?: string) => {
+  const normalized = String(status || '').trim().toUpperCase();
+  if (!normalized) return '';
+  if (normalized === 'COMPLETED') return 'Completed';
+  if (normalized === 'CANCELLED') return 'Cancelled';
+  if (normalized === 'ACTIVE' || normalized === 'ONGOING') return 'Active';
+  if (normalized === 'CONFIRMED') return 'Confirmed';
+  if (normalized === 'PENDING' || normalized === 'PENDING_PAYMENT') return 'Pending';
+  const text = normalized.replace(/_/g, ' ').toLowerCase();
+  return text.charAt(0).toUpperCase() + text.slice(1);
 };
 
 export function RideHistoryScreen({
@@ -51,19 +65,21 @@ export function RideHistoryScreen({
 
   const items: HistoryRow[] =
     rides && rides.length > 0
-      ? rides.map((r, i) => ({
-          id: r._id || `r${i}`,
-          label:
-            r.scooter?.registrationNumber ||
-            (r._id ? `RIDE-${r._id.slice(-4).toUpperCase()}` : `RIDE00${i + 1}`),
-          dateTime: [r.schedule?.dateLabel, r.schedule?.startLabel]
-            .filter(Boolean)
-            .join(' • ') || '—',
-          duration: formatDuration(r),
-          distance: r.distance != null ? `${r.distance.toFixed(1)} km` : '—',
-          amount: r.pricing?.totalPayable ?? r.fare ?? 0,
-          status: r.status?.toLowerCase() === 'cancelled' ? 'Penalty' : 'Completed',
-        }))
+      ? rides.map((r, i) => {
+          const total = r.pricing?.totalPayable ?? r.fare;
+          return {
+            id: r._id || `r${i}`,
+            label: r.scooter?.registrationNumber || '—',
+            dateTime: [r.schedule?.dateLabel, r.schedule?.startLabel]
+              .filter(Boolean)
+              .join(' • ') || '—',
+            duration: formatDuration(r),
+            distance: r.distance != null ? `${r.distance.toFixed(1)} km` : '—',
+            amount: typeof total === 'number' && Number.isFinite(total) ? `₹${total}` : '—',
+            status: humanizeRideStatus(r.status),
+            cancelled: String(r.status || '').trim().toUpperCase() === 'CANCELLED',
+          };
+        })
       : [];
 
   return (
@@ -97,16 +113,18 @@ export function RideHistoryScreen({
                   <Text style={styles.rideLabel}>{item.label}</Text>
                   <Text style={styles.rideDate}>{item.dateTime}</Text>
                 </View>
-                <View style={[styles.statusChip, item.status === 'Penalty' && styles.statusChipPenalty]}>
-                  <Text
-                    style={[
-                      styles.statusText,
-                      item.status === 'Penalty' && styles.statusTextPenalty,
-                    ]}
-                  >
-                    {item.status}
-                  </Text>
-                </View>
+                {item.status ? (
+                  <View style={[styles.statusChip, item.cancelled && styles.statusChipPenalty]}>
+                    <Text
+                      style={[
+                        styles.statusText,
+                        item.cancelled && styles.statusTextPenalty,
+                      ]}
+                    >
+                      {item.status}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
 
               <View style={styles.statsRow}>
@@ -119,7 +137,7 @@ export function RideHistoryScreen({
                   <Text style={styles.statText}>{item.distance}</Text>
                 </View>
                 <View style={styles.amountWrap}>
-                  <Text style={styles.amountText}>₹{item.amount}</Text>
+                  <Text style={styles.amountText}>{item.amount}</Text>
                 </View>
               </View>
 

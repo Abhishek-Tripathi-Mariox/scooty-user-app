@@ -16,7 +16,7 @@ import { GradientButton } from '../components/GradientButton';
 import { MapPinIcon, ScooterIcon, ShareIcon } from '../components/HomeIcons';
 import { LiveMap } from '../components/LiveMap';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { AddressPinIcon, BatteryIcon, ClockIcon } from '../components/RideIcons';
+import { AddressPinIcon, BatteryIcon } from '../components/RideIcons';
 import { ScreenSurface } from '../components/ScreenSurface';
 import type { Dashboard, User } from '../services/userApi';
 import type { PickupStation } from './PickupStationScreen';
@@ -47,6 +47,7 @@ export function HomeScreen({
   onReferPress,
   onLocationPress,
   onWalletPress,
+  inviteReward,
 }: {
   user?: User | null;
   dashboard?: Dashboard | null;
@@ -59,10 +60,20 @@ export function HomeScreen({
   onReferPress?: () => void;
   onLocationPress?: () => void;
   onWalletPress?: () => void;
+  inviteReward?: number;
 }) {
   const styles = useStyles(RAW_STYLES);
   const layout = useResponsiveLayout();
-  const city = user?.settings?.location?.city || user?.city || 'Kuala lumpur, Malaysia';
+  const city = user?.settings?.location?.city || user?.city || 'Set your location';
+  const walletBalance = dashboard?.walletBalance ?? user?.walletBalance;
+  const walletText =
+    typeof walletBalance === 'number' && Number.isFinite(walletBalance)
+      ? `₹${Math.round(walletBalance)}`
+      : '—';
+  const referTitle =
+    typeof inviteReward === 'number' && inviteReward > 0
+      ? `Refer & Earn ₹${inviteReward}`
+      : 'Refer & Earn';
   const nearbyStations = (stations ?? []).slice(0, 5);
 
   const carouselGap = 16;
@@ -154,9 +165,7 @@ export function HomeScreen({
 
             <Pressable style={styles.walletPill} onPress={onWalletPress} hitSlop={6}>
               <WalletCardGlyph />
-              <Text style={styles.walletText}>
-                {`₹${Math.round(dashboard?.walletBalance ?? 0)}`}
-              </Text>
+              <Text style={styles.walletText}>{walletText}</Text>
             </Pressable>
           </View>
         </View>
@@ -270,7 +279,7 @@ export function HomeScreen({
             <View style={styles.referralTextWrap}>
               <View style={styles.referralTitleRow}>
                 <PeopleIcon />
-                <Text style={styles.referralTitle}>Refer & Earn {'₹'}200</Text>
+                <Text style={styles.referralTitle}>{referTitle}</Text>
               </View>
               <Text style={styles.referralSubtitle}>
                 Invite friends and earn after their first ride
@@ -382,11 +391,19 @@ function StationCard({
         <Text style={styles.stationName} numberOfLines={1}>
           {station.name}
         </Text>
-        <View style={styles.statsRow}>
-          <StatPill icon={<BatteryIcon size={14} color="#16a34a" />} label={station.battery} />
-          <StatPill icon={<ClockIcon size={14} color="#4a5565" />} label={station.parking} />
-          <StatPill icon={<AddressPinIcon size={14} color="#4a5565" />} label={station.distance} />
-        </View>
+        {station.battery || station.distance ? (
+          <View style={styles.statsRow}>
+            {station.battery ? (
+              <StatPill icon={<BatteryIcon size={14} color="#16a34a" />} label={station.battery} />
+            ) : null}
+            {station.distance ? (
+              <StatPill
+                icon={<AddressPinIcon size={14} color="#4a5565" />}
+                label={station.distance}
+              />
+            ) : null}
+          </View>
+        ) : null}
         <GradientButton
           label="Book Now"
           onPress={onPress}
@@ -396,7 +413,7 @@ function StationCard({
         />
       </View>
 
-      {station.available > 0 ? (
+      {station.available != null && station.available > 0 ? (
         <Animated.View
           pointerEvents="none"
           style={[

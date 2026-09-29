@@ -148,7 +148,11 @@ export function BookingDetailScreen({
           <View style={styles.divider} />
           <Row
             label="Total Payable"
-            value={formatCurrency(booking.pricing?.totalPayable || 0)}
+            value={
+              booking.pricing?.totalPayable != null
+                ? formatCurrency(booking.pricing.totalPayable)
+                : '—'
+            }
             bold
           />
         </View>

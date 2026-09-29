@@ -23,7 +23,7 @@ export type ReferralSummary = {
   referralCode: string;
   referralEarnings: number;
   totalReferrals: number;
-  inviteReward: number;
+  inviteReward?: number;
   appliedReferral?: string | null;
   invitees?: { name?: string; mobile?: string; createdAt?: string }[];
 };
@@ -156,18 +156,24 @@ function ReferralsTab({
   const [applying, setApplying] = useState(false);
 
   const code = referral?.referralCode || '';
-  const earnings = referral?.referralEarnings ?? 0;
-  const totalReferrals = referral?.totalReferrals ?? 0;
-  const inviteReward = referral?.inviteReward ?? 50;
+  const earnings = referral?.referralEarnings;
+  const totalReferrals = referral?.totalReferrals;
+  const inviteReward =
+    typeof referral?.inviteReward === 'number' && referral.inviteReward > 0
+      ? referral.inviteReward
+      : null;
   const alreadyApplied = Boolean(referral?.appliedReferral);
 
   const handleShare = async () => {
     if (!code) return;
     try {
       await Share.share({
-        message: `Join Slydo Mobility with my referral code: ${code} and we both earn ${formatCurrency(
-          inviteReward,
-        )}!`,
+        message:
+          inviteReward != null
+            ? `Join Slydo Mobility with my referral code: ${code} and we both earn ${formatCurrency(
+                inviteReward,
+              )}!`
+            : `Join Slydo Mobility with my referral code: ${code}`,
       });
     } catch {
       // share cancelled
@@ -208,16 +214,22 @@ function ReferralsTab({
           <GiftIcon color="#101828" />
           <Text style={styles.earningsLabel}>Your Referral Earnings</Text>
         </View>
-        <Text style={styles.earningsAmount}>{formatCurrency(earnings)}</Text>
-        <Text style={styles.earningsMeta}>
-          {totalReferrals} friend{totalReferrals === 1 ? '' : 's'} invited
+        <Text style={styles.earningsAmount}>
+          {typeof earnings === 'number' ? formatCurrency(earnings) : '—'}
         </Text>
+        {typeof totalReferrals === 'number' ? (
+          <Text style={styles.earningsMeta}>
+            {totalReferrals} friend{totalReferrals === 1 ? '' : 's'} invited
+          </Text>
+        ) : null}
       </View>
 
       <View style={styles.card}>
         <Text style={styles.shareTitle}>Share Your Code</Text>
         <Text style={styles.shareSubtitle}>
-          Invite friends and earn {formatCurrency(inviteReward)} per successful referral
+          {inviteReward != null
+            ? `Invite friends and earn ${formatCurrency(inviteReward)} per successful referral`
+            : 'Invite friends and earn on every successful referral'}
         </Text>
         <View style={styles.codeInputRow}>
           <TextInput
@@ -276,7 +288,9 @@ function ReferralsTab({
         <Text style={styles.howItem}>Share your referral code with friends</Text>
         <Text style={styles.howItem}>They sign up and complete their first ride</Text>
         <Text style={styles.howItem}>
-          You both get {formatCurrency(inviteReward)} in wallet!
+          {inviteReward != null
+            ? `You both get ${formatCurrency(inviteReward)} in wallet!`
+            : 'You both get a reward in wallet!'}
         </Text>
       </View>
     </View>

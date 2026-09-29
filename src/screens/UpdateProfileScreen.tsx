@@ -268,9 +268,9 @@ export function UpdateProfileScreen({
                   <IndianFlag size={22} />
                 </View>
                 <Text style={styles.phoneText} numberOfLines={1}>
-                  {user?.mobile ? `+91 ${user.mobile}` : '+91 98765 43210'}
+                  {user?.mobile ? `+91 ${user.mobile}` : '—'}
                 </Text>
-                <VerifiedCheck size={20} />
+                {user?.mobile ? <VerifiedCheck size={20} /> : null}
               </View>
             </View>
 

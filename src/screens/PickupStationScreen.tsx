@@ -24,10 +24,10 @@ export type PickupStation = {
   id: string;
   name: string;
   address: string;
-  distance: string;
-  available: number;
-  battery: string;
-  parking: string;
+  // Undefined / null means the backend did not provide the value.
+  distance?: string;
+  available: number | null;
+  battery?: string;
   coordinates?: { latitude: number; longitude: number };
 };
 
@@ -110,23 +110,18 @@ export function PickupStationScreen({
                   <Stat
                     icon={<SmallScooterIcon size={18} color="#16a34a" />}
                     label="Available"
-                    value={String(station.available)}
+                    value={station.available != null ? String(station.available) : '—'}
                   />
                   <Stat
                     icon={<BatteryIcon size={18} color="#16a34a" />}
                     label="Avg Battery"
-                    value={station.battery}
+                    value={station.battery || '—'}
                   />
                   <Stat
                     icon={<WalkerIcon size={18} color="#4a5565" />}
                     label="Distance"
-                    value={station.distance}
+                    value={station.distance || '—'}
                   />
-                </View>
-
-                <View style={styles.bottomRow}>
-                  <Text style={styles.bottomText}>24/7 Access</Text>
-                  <Text style={styles.bottomText}>{station.parking}</Text>
                 </View>
               </Pressable>
             );
@@ -313,18 +308,6 @@ const RAW_STYLES = {
     fontWeight: '700',
     lineHeight: 20,
     marginLeft: 24,
-  },
-  bottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 4,
-  },
-  bottomText: {
-    color: '#363636',
-    fontSize: 15,
-    fontWeight: '500',
-    lineHeight: 22,
   },
   footer: {
     position: 'absolute',

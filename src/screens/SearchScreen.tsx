@@ -26,6 +26,10 @@ import { useStyles } from '../utils/responsiveStyles';
 
 const StationThumb = require('../assets/images/station-thumb.jpg');
 
+// Slider bounds. A filter left at its widest setting is not "active".
+const MIN_BATTERY_FLOOR = 0;
+const MAX_DISTANCE_CEILING = 20;
+
 export function SearchScreen({
   onBack,
   stations,
@@ -44,16 +48,23 @@ export function SearchScreen({
   const styles = useStyles(RAW_STYLES);
   const bottomInset = useBottomInset();
   const items = stations ?? [];
-  const [minBattery, setMinBattery] = useState(0);
-  const [maxDistance, setMaxDistance] = useState(20);
+  const [minBattery, setMinBattery] = useState(MIN_BATTERY_FLOOR);
+  const [maxDistance, setMaxDistance] = useState(MAX_DISTANCE_CEILING);
 
   const filteredItems = useMemo(
     () =>
       items.filter((s) => {
-        const battery =
-          typeof s.averageBatteryPercent === 'number' ? s.averageBatteryPercent : 100;
-        const distance = typeof s.distanceKm === 'number' ? s.distanceKm : 0;
-        return battery >= minBattery && distance <= maxDistance;
+        // Unknown values are never assumed: a station with no battery /
+        // distance reading cannot satisfy a filter the user has actually set.
+        const batteryOk =
+          typeof s.averageBatteryPercent === 'number'
+            ? s.averageBatteryPercent >= minBattery
+            : minBattery <= MIN_BATTERY_FLOOR;
+        const distanceOk =
+          typeof s.distanceKm === 'number'
+            ? s.distanceKm <= maxDistance
+            : maxDistance >= MAX_DISTANCE_CEILING;
+        return batteryOk && distanceOk;
       }),
     [items, minBattery, maxDistance],
   );
@@ -91,7 +102,7 @@ export function SearchScreen({
             label="Min Battery"
             suffix="%"
             value={minBattery}
-            min={0}
+            min={MIN_BATTERY_FLOOR}
             max={100}
             step={1}
             onChange={setMinBattery}
@@ -101,7 +112,7 @@ export function SearchScreen({
             suffix=" km"
             value={maxDistance}
             min={1}
-            max={20}
+            max={MAX_DISTANCE_CEILING}
             step={1}
             onChange={setMaxDistance}
           />
@@ -154,7 +165,11 @@ export function SearchScreen({
                   <Stat
                     icon={<SmallScooterIcon size={18} color="#16a34a" />}
                     label="Available"
-                    value={String(station.availableScooters ?? 0)}
+                    value={
+                      typeof station.availableScooters === 'number'
+                        ? String(station.availableScooters)
+                        : '—'
+                    }
                   />
                   <Stat
                     icon={<BatteryIcon size={18} color="#16a34a" />}
